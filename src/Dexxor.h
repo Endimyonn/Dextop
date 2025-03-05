@@ -12,8 +12,10 @@ public:
 	std::string refreshToken;
 
 	void Authenticate(std::string argUsername, std::string argPassword, std::string argClientID, std::string argClientSecret);
-	int AuthTokenAge();
+	void RefreshAccessToken();
 	bool Authenticated();
+	int AccessTokenAge();
+	bool AccessTokenExpired();
 
 	nlohmann::json Search(std::string argTitle, unsigned short limit = 10, unsigned short page = 0);
 	nlohmann::json GetChapters(std::string mangaID);

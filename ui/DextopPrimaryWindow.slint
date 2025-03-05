@@ -39,6 +39,7 @@ export component DextopPrimaryWindow inherits Window {
     callback openConsole();
     callback doAuthenticate();
     callback authStatus();
+    callback reAuthenticate();
 
     
     HorizontalLayout {
@@ -408,6 +409,7 @@ export component DextopPrimaryWindow inherits Window {
 
                         Button {
                             text: "Refresh Token";
+                            clicked => {root.reAuthenticate()}
                         }
                     }
                 }

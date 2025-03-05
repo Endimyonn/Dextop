@@ -92,21 +92,67 @@ void Dexxor::Authenticate(std::string argUsername, std::string argPassword, std:
 	}
 	else
 	{
-		cout << "Authentication failed. Reason: ";
-		if (responseJson["error"] == "invalid_client")
-		{
-			cout << "invalid credentials. Check provided information." << endl;
-		}
-		else
-		{
-			cout << responseJson["error"] << endl << responseJson;
-		}
+		authenticated = false;
+		cout << "Authentication failed. Reason: " << responseJson["error"] << endl << responseJson << endl;
 	}
 }
 
-int Dexxor::AuthTokenAge()
+void Dexxor::RefreshAccessToken()
+{
+	if (Dexxor::AccessTokenExpired() == false)
+	{
+		std::cout << "Dexxor: access token asked to refresh, but not yet expired! (age: " << AccessTokenAge() << "s)" << std::endl;
+		return;
+	}
+
+	CURL* curl = curl_easy_init();
+	CURLcode result;
+	std::string readBuffer = "";
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, Dextop_UserAgent);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+
+	//set url
+	curl_easy_setopt(curl, CURLOPT_URL, "https://auth.mangadex.org/realms/mangadex/protocol/openid-connect/token");
+
+	//set data
+	std::string fields = std::string("grant_type=refresh_token")
+		+ "&refresh_token=" + refreshToken
+		+ "&client_id=" + tokenCID
+		+ "&client_secret=" + tokenCSecret;
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, fields.c_str());
+
+	result = curl_easy_perform(curl);
+	if (result != CURLE_OK)
+	{
+		cout << "Reauthentication request failed: " << curl_easy_strerror(result) << endl;
+		return;
+	}
+
+	json responseJson = json::parse(readBuffer);
+
+	if (responseJson["access_token"] != nullptr)
+	{
+		authenticated = true;
+		accessToken = responseJson["access_token"];
+		tokenTime = std::chrono::high_resolution_clock::now();
+		cout << "Reauthentication succeeded." << endl;
+	}
+	else
+	{
+		authenticated = false;
+		cout << "Reauthentication failed. Reason: " << responseJson["error"] << endl << responseJson << endl;
+	}
+}
+
+int Dexxor::AccessTokenAge()
 {
 	return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - tokenTime).count();
+}
+
+bool Dexxor::AccessTokenExpired()
+{
+	return AccessTokenAge() >= 900;
 }
 
 void RefreshToken()

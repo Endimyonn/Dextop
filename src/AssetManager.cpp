@@ -16,24 +16,20 @@ std::string imgPath = "images/";
 
 AssetManager::AssetManager()
 {
-    if (std::filesystem::exists("assets/"))
+    if (std::filesystem::exists("assets/") == false)
     {
-        std::cout << "assets/ exists" << std::endl;
-    }
-    else
-    {
-        std::cout << "assets/ doesn't exist" << std::endl;
+        std::cout << "assets layout doesn't exist, creating" << std::endl;
         std::filesystem::create_directory("assets");
         std::filesystem::create_directory("assets/images");
         std::filesystem::create_directory("assets/images/pages");
         std::filesystem::create_directory("assets/images/covers");
     }
-    std::cout << "AssetManager initialized." << std::endl;
+    std::cout << "AssetManager initialized" << std::endl;
 }
 
 AssetManager::~AssetManager()
 {
-    std::cout << "AssetManager shut down." << std::endl;
+    std::cout << "AssetManager shut down" << std::endl;
 }
 
 size_t WriteAsset(void* ptr, size_t size, size_t nmemb, void* outFile)

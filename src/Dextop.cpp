@@ -156,8 +156,12 @@ int main(int argc, char **argv)
         {
             cout << "Access Token: " << localDexxor.accessToken << endl;
             cout << "Refresh Token: " << localDexxor.refreshToken << endl;
-            cout << "Access Token age (s): " << localDexxor.AuthTokenAge() << endl;
+            cout << "Access Token age (s): " << localDexxor.AccessTokenAge() << endl;
         }
+    });
+
+    ui->on_reAuthenticate([&]{
+        localDexxor.RefreshAccessToken();
     });
 
     ui->run();
