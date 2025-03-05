@@ -48,7 +48,7 @@ void AssetManager::GetImage(std::string url, std::string path)
         std::cout << "File " << path << " exists already" << std::endl;
         return;
     }
-    FILE *outFile = fopen((assetsRoot + imgPath + path).c_str(), "wb");
+    FILE *outFile = fopen((assetsRoot + path).c_str(), "wb");
     CURL* curl = curl_easy_init();
 	CURLcode result;
 

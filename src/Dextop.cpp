@@ -72,7 +72,6 @@ void DoTitleSearch(std::string title, unsigned short limit = 10, unsigned short 
                 assetManager.GetMangaCover(coverURL, resultInfo["relationships"][j]["attributes"]["fileName"].get<string>());
             }
         }
-        cout << endl;
         uiResults.push_back(makeResult);
     }
     slint::invoke_from_event_loop([=](){
@@ -97,9 +96,8 @@ void DoTitleSearch(std::string title, unsigned short limit = 10, unsigned short 
             newResult.description = ui->get_results()->row_data(i)->description;
             newResult.coverFile = ui->get_results()->row_data(i)->coverFile;
             newResult.cover = slint::Image::load_from_path((std::string("assets/images/covers/") + std::string(ui->get_results()->row_data(i)->coverFile)).c_str());
-            cout << "created image " << i << endl;
             ui->get_results()->set_row_data(i, newResult);
-            cout << "set row " << i << endl;
+            cout << "image-set row " << i << endl;
             //assetManager.ImageLoad(&getRow, std::string("assets/images/covers/") + std::string(uiResults[i].coverFile));
         }
     });
