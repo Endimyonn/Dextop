@@ -1,0 +1,417 @@
+import { Button, VerticalBox, Spinner, LineEdit, ListView, TabWidget, StandardTableView } from "std-widgets.slint";
+
+
+
+export struct SearchResult {
+    id: string,
+    title: string,
+    description: string,
+    coverFile: string,
+    cover: image
+}
+
+export component DextopPrimaryWindow inherits Window {
+    title: "Dextop";
+    min-width: 480px;
+    min-height: 320px;
+    max-width: 9999px;
+    max-height: 9999px;
+
+    out property<int> tab: 3;
+
+    callback getUpdates();
+
+    in-out property<string> searchTarget: "";
+    in-out property<bool> searchLoading: false;
+    in-out property<string> currentSearch: "";
+    in property<[SearchResult]> results;
+    in property<int> pageCount: 1;
+    in-out property<int> page: 1;
+    callback doSearch();
+    callback changeSearchPage(int);
+    callback searchListingChapters(string);
+
+    in property<bool> consoleOpen: false;
+    in-out property<string> authUsername;
+    in-out property<string> authPassword;
+    in-out property<string> authCID;
+    in-out property<string> authCSecret;
+    callback openConsole();
+    callback doAuthenticate();
+    callback authStatus();
+
+    
+    HorizontalLayout {
+        // Sidebar
+        VerticalBox {
+            width: 96px;
+            padding: 8px;
+            
+            VerticalLayout
+            {
+                alignment: start;
+                spacing: 10px;
+
+                Button {
+                    width: 84px;
+                    height: 32px;
+                    text: "Home";
+                    clicked => {
+                        root.tab = 0;
+                    }
+                    enabled: root.tab != 0;
+                }
+                Button {
+                    width: 84px;
+                    height: 32px;
+                    text: "Updates";
+                    clicked => {
+                        root.tab = 1;
+                    }
+                    enabled: root.tab != 1;
+                }
+                Button {
+                    width: 84px;
+                    height: 32px;
+                    text: "Search";
+                    clicked => {
+                        root.tab = 2;
+                    }
+                    enabled: root.tab != 2;
+                }
+            }
+            Button {
+                x: 0px;
+                width: 84px;
+                height: 32px;
+                text: "Settings";
+                clicked => {
+                    root.tab = 3;
+                }
+                enabled: root.tab != 3;
+            }
+        }
+
+        TabWidget {
+            y: -32px;
+            height: parent.height + 32px;
+            current-index: root.tab;
+
+            // Home
+            Tab {
+                Text {
+                    text: "Home tab";
+                }
+            }
+
+            // Updates
+            Tab {
+                VerticalBox {
+                    HorizontalLayout {
+                        height: 32px;
+                        alignment: LayoutAlignment.space-between;
+
+                        Text {
+                            text: "Newest Chapters";
+                            font-size: 16px;
+                            vertical-alignment: center;
+                        }
+    
+                        Button {
+                            text: "Refresh";
+                            clicked => {
+                                root.getUpdates();
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Search
+            Tab {
+                VerticalBox {
+                    HorizontalLayout {
+                        max-height: 32px;
+                        LineEdit {
+                            text: searchTarget;
+                            placeholder-text: "Search...";
+                            changed text => { searchTarget = self.text; }
+                            key-pressed(event) => {
+                                if (event.text == Key.Return && searchLoading == false) {
+                                    root.doSearch();
+                                    return EventResult.accept;
+                                }
+                                reject;
+                            }
+                        }
+                        Rectangle {
+                            width: 8px;
+                        }
+                        Button {
+                            text: "Search";
+                            enabled: searchLoading == false;
+                            clicked => {
+                                root.doSearch();
+                            }
+                        }
+                    }
+            
+                    // if results.length == 0 && searchLoading == false:
+                    if results.length > 0 && searchLoading == false:
+                        ListView {
+                            for data in results : Rectangle {
+                            // for data in [{title: "abc", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.", id: "abcd"}] : Rectangle {
+                                height: 112px;
+                                width: parent.width;
+                                Rectangle {
+                                    width: parent.width;
+                                    height: 104px;
+                                    background: #222222;
+                                    clip: true;
+    
+                                    //icon
+                                    Rectangle {
+                                        background: #000000;
+                                        width: 64px;
+                                        height: 88px;
+                                        x: 8px;
+    
+                                        Text {
+                                            color: white;
+                                            text: "Image\nHere";
+                                            horizontal-alignment: center;
+                                        }
+                                    }
+                                    Image {
+                                        width: 64px;
+                                        height: 88px;
+                                        x:8px;
+
+                                        source: data.cover;
+                                    }
+            
+                                    //title
+                                    Text {
+                                        x: parent.x + 80px;
+                                        y: parent.y;
+                                        width: parent.width - 176px;
+                                        max-height: parent.height;
+                                        text: data.title;
+                                        horizontal-alignment: left;
+                                        vertical-alignment: top;
+                                        overflow: elide;
+                                    }
+            
+                                    //description
+                                    Text {
+                                        x: parent.x + 80px;
+                                        width: parent.width - 176px;
+                                        y: parent.y + 24px;
+                                        height: parent.height - 32px;
+                                        text: data.description;
+                                        font-size: 10px;
+                                        wrap: word-wrap;
+                                    }
+    
+                                    //buttons
+                                    VerticalLayout {
+                                        x: parent.width - 88px;
+                                        width: 80px;
+                                        height: parent.height - 16px;
+                                        alignment: LayoutAlignment.space-around;
+    
+                                        Button {
+                                            text: "Read";
+                                            height: 32px;
+                                        }
+    
+                                        Button {
+                                            text: "Chapters";
+                                            height: 32px;
+                                            clicked => {root.searchListingChapters(data.id)}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    if results.length == 0:
+                        Text {
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            text: searchLoading == true ? "Loading..." : "No results";
+                        }
+                    HorizontalLayout {
+                        height: 40px;
+                        padding-top: 8px;
+                        alignment: LayoutAlignment.center;
+                        Button {
+                            text: "<";
+                            width: self.height;
+                            enabled: !root.searchLoading && root.page > 1;
+                            clicked => {
+                                root.page = root.page - 1;
+                                root.changeSearchPage(root.page);
+                            }
+                        }
+                        Rectangle {
+                            width: 16px;
+                        }
+                        Text {
+                            text: root.page;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        Rectangle {
+                            width: 16px;
+                        }
+                        Button {
+                            text: ">";
+                            width: self.height;
+                            enabled: !root.searchLoading && root.page < root.pageCount;
+                            clicked => {
+                                root.page = root.page + 1;
+                                root.changeSearchPage(root.page);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Settings
+            Tab {
+                VerticalLayout {
+                    padding: 8px;
+
+                    Text {
+                        height: 32px;
+                        text: "Settings";
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        font-size: 16px;
+                    }
+
+                    HorizontalLayout {
+                        alignment: LayoutAlignment.stretch;
+                        height: 40px;
+                        padding-bottom: 8px;
+
+                        Text {
+                            text: "Console";
+                            vertical-alignment: center;
+                        }
+
+                        Button {
+                            width: 128px;
+                            text: "Open";
+                            clicked => {root.openConsole()}
+                            enabled: !root.consoleOpen;
+                        }
+                    }
+
+                    Text {
+                        height: 40px;
+                        text: "Authentication";
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        font-size: 16px;
+                    }
+
+                    HorizontalLayout {
+                        alignment: stretch;
+                        height: 40px;
+                        padding-bottom: 8px;
+
+                        Text {
+                            text: "Username";
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            width: 192px;
+                            text: root.authUsername;
+                            changed text => { authUsername = self.text; }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        alignment: stretch;
+                        height: 40px;
+                        padding-bottom: 8px;
+
+                        Text {
+                            text: "Password";
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            width: 192px;
+                            input-type: password;
+                            text: root.authPassword;
+                            changed text => { authPassword = self.text; }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        alignment: stretch;
+                        height: 40px;
+                        padding-bottom: 8px;
+
+                        Text {
+                            text: "Client ID";
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            width: 192px;
+                            text: root.authCID;
+                            changed text => { authCID = self.text; }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        alignment: stretch;
+                        height: 40px;
+                        padding-bottom: 8px;
+
+                        Text {
+                            text: "Client Secret";
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            width: 192px;
+                            text: root.authCSecret;
+                            input-type: password;
+                            
+                            changed text => { authCSecret = self.text; }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        alignment: center;
+                        height: 40px;
+                        padding-bottom: 8px;
+
+                        Button {
+                            text: "Authenticate";
+                            clicked => {root.doAuthenticate()}
+                        }
+
+                        Rectangle { width: 8px; }
+
+                        Button {
+                            text: "Status";
+                            clicked => {root.authStatus()}
+                        }
+
+                        Rectangle { width: 8px; }
+
+                        Button {
+                            text: "Refresh Token";
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
