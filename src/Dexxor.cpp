@@ -257,7 +257,7 @@ nlohmann::json Dexxor::GetChapters(std::string mangaID)
 
 	//set url
 	std::string url = std::string("https://api.mangadex.org/chapter?") +
-									+ "limit=50"
+									+ "limit=100"
 									+ "&manga=" + mangaID
 									+ "&translatedLanguage%5B%5D=" + "en"
 									+ "&contentRating%5B%5D=" + "safe"

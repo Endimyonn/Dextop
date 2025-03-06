@@ -9,6 +9,7 @@
 #include "AssetManager.h"
 #include "Logger.h"
 #include "DextopPrimaryWindow.h"
+#include "Reader.h"
 
 class Dextop
 {

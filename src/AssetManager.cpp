@@ -16,14 +16,22 @@ std::string imgPath = "images/";
 
 AssetManager::AssetManager()
 {
-    if (std::filesystem::exists("assets/") == false)
+    //ensure asset directory skeleton exists
+    std::string dirs[4] =
     {
-        std::cout << "assets layout doesn't exist, creating" << std::endl;
-        std::filesystem::create_directory("assets");
-        std::filesystem::create_directory("assets/images");
-        std::filesystem::create_directory("assets/images/pages");
-        std::filesystem::create_directory("assets/images/covers");
+        "assets",
+        "assets/images",
+        "assets/images/pages",
+        "assets/images/covers"
+    };
+    for (int i = 0; i < 4; i++)
+    {
+        if (std::filesystem::create_directory(dirs[i]) == true)
+        {
+            std::cout << "Created ddirectory \"" << dirs[i] << "\"" << std::endl;
+        }
     }
+
     std::cout << "AssetManager initialized" << std::endl;
 }
 

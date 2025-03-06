@@ -68,8 +68,9 @@ void DoTitleSearch(std::string title, unsigned short limit = 10, unsigned short 
             if (resultInfo["relationships"][j]["type"].get<string>() == "cover_art")
             {
                 makeResult.coverFile = resultInfo["relationships"][j]["attributes"]["fileName"].begin().value();
-                std::string coverURL = std::string("https://uploads.mangadex.org/covers/") + std::string(makeResult.id) + "/" + resultInfo["relationships"][j]["attributes"]["fileName"].get<string>();
-                assetManager.GetMangaCover(coverURL, resultInfo["relationships"][j]["attributes"]["fileName"].get<string>());
+                std::string coverURL = std::string("https://uploads.mangadex.org/covers/") + std::string(makeResult.id) + "/" + resultInfo["relationships"][j]["attributes"]["fileName"].get<string>() + Dextop_Cover256Suffix;
+                cout << "adapted coverURL: " << coverURL << endl;
+                assetManager.GetMangaCover(coverURL, resultInfo["relationships"][j]["attributes"]["fileName"].get<string>() + Dextop_Cover256Suffix);
             }
         }
         uiResults.push_back(makeResult);
@@ -95,7 +96,7 @@ void DoTitleSearch(std::string title, unsigned short limit = 10, unsigned short 
             newResult.title = ui->get_results()->row_data(i)->title;
             newResult.description = ui->get_results()->row_data(i)->description;
             newResult.coverFile = ui->get_results()->row_data(i)->coverFile;
-            newResult.cover = slint::Image::load_from_path((std::string("assets/images/covers/") + std::string(ui->get_results()->row_data(i)->coverFile)).c_str());
+            newResult.cover = slint::Image::load_from_path((std::string("assets/images/covers/") + std::string(ui->get_results()->row_data(i)->coverFile) + Dextop_Cover256Suffix).c_str());
             ui->get_results()->set_row_data(i, newResult);
             cout << "image-set row " << i << endl;
             //assetManager.ImageLoad(&getRow, std::string("assets/images/covers/") + std::string(uiResults[i].coverFile));
@@ -110,15 +111,24 @@ int main(int argc, char **argv)
     //load settings
     std::ifstream settingsFS("settings.json");
     json settings = json::parse(settingsFS);
+    settingsFS.close();
 
     ui->set_authUsername(settings["authUsername"].get<string>().c_str());
     ui->set_authPassword(settings["authPassword"].get<string>().c_str());
     ui->set_authCID(settings["authCID"].get<string>().c_str());
     ui->set_authCSecret(settings["authCSecret"].get<string>().c_str());
+    slint::Size<uint32_t> windowSize;
+    windowSize.width = settings["mainWindowSizeX"].get<int>();
+    windowSize.height = settings["mainWindowSizeY"].get<int>();
+    ui->window().set_size(slint::PhysicalSize(windowSize));
 
     cout << "Settings loaded." << endl;
     
     //UI
+    ui->on_openManga([&](slint::SharedString mangaID) {
+        InitReader(mangaID, localDexxor);
+    });
+
     ui->on_getUpdates([&](){
         cout << "updates feature not done yet" << endl;
     });
@@ -165,6 +175,15 @@ int main(int argc, char **argv)
     });
 
     ui->run();
+
     cout << "finishing up" << endl;
+
+    //store settings
+    settings["mainWindowSizeX"] = ui->window().size().width;
+    settings["mainWindowSizeY"] = ui->window().size().height;
+    std::ofstream settingsSave("settings.json", std::ofstream::trunc);
+    settingsSave << std::setw(4) << settings << std::endl;
+    settingsSave.close();
+    cout << "settings saved" << endl;
     return 0;
 }
