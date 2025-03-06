@@ -21,10 +21,19 @@ endif (NOT Slint_FOUND)
 include_directories(include)
 file(GLOB SOURCES "src/*.cpp")
 
-add_executable(${CMAKE_PROJECT_NAME} src/Dextop.cpp src/Dexxor.cpp src/Logger.cpp src/AssetManager.cpp)
+add_executable(${CMAKE_PROJECT_NAME} src/Dextop.cpp src/Dexxor.cpp src/AssetManager.cpp)
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Slint::Slint)
 slint_target_sources(${CMAKE_PROJECT_NAME} ui/DextopPrimaryWindow.slint)
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC include)
+
+# console
+if(WIN32)
+    set_target_properties(${CMAKE_PROJECT_NAME}
+    PROPERTIES
+        LINK_FLAGS_DEBUG "/SUBSYSTEM:CONSOLE"
+        LINK_FLAGS_RELEASE "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup"
+    )
+endif(WIN32)
 
 # On Windows, copy the Slint DLL next to the application binary so that it's found.
 if (WIN32)

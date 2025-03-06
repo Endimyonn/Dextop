@@ -1,5 +1,6 @@
 #include "Dexxor.h"
 #include "Dextop_Defs.h"
+#include "Logger.h"
 
 
 #include <iostream>
@@ -29,7 +30,7 @@ Dexxor::Dexxor()
 {
 	//initialize curl
 	curl_global_init(CURL_GLOBAL_ALL);
-	std::cout << "Dexxor init done" << std::endl;
+	dtlog << "Dexxor init done" << std::endl;
 }
 
 void Dexxor::Shutdown()
@@ -101,7 +102,7 @@ void Dexxor::RefreshAccessToken()
 {
 	if (Dexxor::AccessTokenExpired() == false)
 	{
-		std::cout << "Dexxor: access token asked to refresh, but not yet expired! (age: " << AccessTokenAge() << "s)" << std::endl;
+		dtlog << "Dexxor: access token asked to refresh, but not yet expired! (age: " << AccessTokenAge() << "s)" << std::endl;
 		return;
 	}
 
@@ -275,7 +276,7 @@ nlohmann::json Dexxor::GetChapters(std::string mangaID)
 	}
 
 	json responseJson = json::parse(readBuffer);
-	std::cout << responseJson << std::endl;
+	dtlog << responseJson << std::endl;
 
 	if (responseJson["error"] != nullptr)
 	{

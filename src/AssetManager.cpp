@@ -1,5 +1,6 @@
 #include "AssetManager.h"
 #include "Dextop_Defs.h"
+#include "Logger.h"
 
 #include "stdio.h"
 #include <iostream>
@@ -28,16 +29,16 @@ AssetManager::AssetManager()
     {
         if (std::filesystem::create_directory(dirs[i]) == true)
         {
-            std::cout << "Created ddirectory \"" << dirs[i] << "\"" << std::endl;
+            dtlog << "Created ddirectory \"" << dirs[i] << "\"" << std::endl;
         }
     }
 
-    std::cout << "AssetManager initialized" << std::endl;
+    dtlog << "AssetManager initialized" << std::endl;
 }
 
 AssetManager::~AssetManager()
 {
-    std::cout << "AssetManager shut down" << std::endl;
+    dtlog << "AssetManager shut down" << std::endl;
 }
 
 size_t WriteAsset(void* ptr, size_t size, size_t nmemb, void* outFile)
@@ -49,7 +50,7 @@ void AssetManager::GetImage(std::string url, std::string path)
 {
     if (std::filesystem::exists((assetsRoot + path).c_str()))
     {
-        std::cout << "File " << path << " exists already" << std::endl;
+        dtlog << "File " << path << " exists already" << std::endl;
         return;
     }
     FILE *outFile = fopen((assetsRoot + path).c_str(), "wb");
@@ -64,7 +65,7 @@ void AssetManager::GetImage(std::string url, std::string path)
     result = curl_easy_perform(curl);
 	if (result != CURLE_OK)
 	{
-		std::cout << "Request failed: " << curl_easy_strerror(result) << std::endl;
+		dtlog << "Request failed: " << curl_easy_strerror(result) << std::endl;
 	}
     curl_easy_cleanup(curl);
     fclose(outFile);

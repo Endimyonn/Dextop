@@ -4,6 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <future>
+#include <filesystem>
 
 #include "Dexxor.h"
 #include "AssetManager.h"
@@ -14,8 +15,8 @@
 class Dextop
 {
 	public:
+		Logger logger;
 		Dexxor localDexxor;
 		AssetManager assetManager;
-		static Logger logger;
 		static slint::ComponentHandle<DextopPrimaryWindow> ui;
 };

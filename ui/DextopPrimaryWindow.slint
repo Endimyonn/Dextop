@@ -17,7 +17,7 @@ export component DextopPrimaryWindow inherits Window {
     max-width: 9999px;
     max-height: 9999px;
 
-    out property<int> tab: 2;
+    out property<int> tab: 3;
 
     callback getUpdates();
 
@@ -33,15 +33,17 @@ export component DextopPrimaryWindow inherits Window {
 
     callback openManga(string);
 
+    in property<string> platform: "";
     in property<bool> consoleOpen: false;
     in-out property<string> authUsername;
     in-out property<string> authPassword;
     in-out property<string> authCID;
     in-out property<string> authCSecret;
     callback openConsole();
-    callback doAuthenticate();
-    callback authStatus();
-    callback reAuthenticate();
+    callback openLog();
+    callback authenticate();
+    callback checkAuthStatus();
+    callback refreshAccessToken();
 
     
     HorizontalLayout {
@@ -300,21 +302,42 @@ export component DextopPrimaryWindow inherits Window {
                             vertical-alignment: center;
                             font-size: 16px;
                         }
-    
+
+                        // Console opener
+                        if root.platform == "windows":
+                            HorizontalLayout {
+                                alignment: LayoutAlignment.stretch;
+                                height: 40px;
+        
+                                Text {
+                                    text: "Console";
+                                    vertical-alignment: center;
+                                }
+        
+                                Button {
+                                    width: 96px;
+                                    height: 32px;
+                                    y: 4px;
+                                    text: "Open";
+                                    clicked => {root.openConsole()}
+                                    enabled: !root.consoleOpen;
+                                }
+                            }
+
+                        // Log opener
                         HorizontalLayout {
-                            alignment: LayoutAlignment.stretch;
+                            alignment: stretch;
                             height: 40px;
-    
                             Text {
-                                text: "Console";
+                                text: "Log file";
                                 vertical-alignment: center;
                             }
-    
                             Button {
-                                width: 128px;
+                                width: 96px;
+                                height: 32px;
+                                y: 4px;
                                 text: "Open";
-                                clicked => {root.openConsole()}
-                                enabled: !root.consoleOpen;
+                                clicked => {root.openLog()}
                             }
                         }
     
@@ -404,21 +427,21 @@ export component DextopPrimaryWindow inherits Window {
     
                             Button {
                                 text: "Authenticate";
-                                clicked => {root.doAuthenticate()}
+                                clicked => {root.authenticate()}
                             }
     
                             Rectangle { width: 8px; }
     
                             Button {
                                 text: "Status";
-                                clicked => {root.authStatus()}
+                                clicked => {root.checkAuthStatus()}
                             }
     
                             Rectangle { width: 8px; }
     
                             Button {
                                 text: "Refresh Token";
-                                clicked => {root.reAuthenticate()}
+                                clicked => {root.refreshAccessToken()}
                             }
                         }
     

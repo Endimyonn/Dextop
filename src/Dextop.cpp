@@ -6,9 +6,9 @@
 using namespace std;
 using json = nlohmann::json;
 
+Logger logger(std::string("Dextop.log"));
 Dexxor localDexxor;
 AssetManager assetManager;
-static Logger logger;
 static slint::ComponentHandle<DextopPrimaryWindow> ui = DextopPrimaryWindow::create();
 
 string url_encode(const string &value) {
@@ -44,7 +44,7 @@ void DoTitleSearch(std::string title, unsigned short limit = 10, unsigned short 
     auto doSearch = std::async(&Dexxor::Search, &localDexxor, url_encode(title), limit, page);
     json searchResults = doSearch.get();
     size_t resultCount = searchResults["data"].size();
-    cout << "Search for \"" << title << "\": found " << resultCount << " (limit: " << limit << ", page: " << page << ", total: " << searchResults["total"] << ")" << endl;
+    dtlog << "Search for \"" << title << "\": found " << resultCount << " (limit: " << limit << ", page: " << page << ", total: " << searchResults["total"] << ")" << endl;
 
     //pass data to the UI
     std::vector<SearchResult> uiResults;
@@ -69,7 +69,7 @@ void DoTitleSearch(std::string title, unsigned short limit = 10, unsigned short 
             {
                 makeResult.coverFile = resultInfo["relationships"][j]["attributes"]["fileName"].begin().value();
                 std::string coverURL = std::string("https://uploads.mangadex.org/covers/") + std::string(makeResult.id) + "/" + resultInfo["relationships"][j]["attributes"]["fileName"].get<string>() + Dextop_Cover256Suffix;
-                cout << "adapted coverURL: " << coverURL << endl;
+                dtlog << "adapted coverURL: " << coverURL << endl;
                 assetManager.GetMangaCover(coverURL, resultInfo["relationships"][j]["attributes"]["fileName"].get<string>() + Dextop_Cover256Suffix);
             }
         }
@@ -98,39 +98,105 @@ void DoTitleSearch(std::string title, unsigned short limit = 10, unsigned short 
             newResult.coverFile = ui->get_results()->row_data(i)->coverFile;
             newResult.cover = slint::Image::load_from_path((std::string("assets/images/covers/") + std::string(ui->get_results()->row_data(i)->coverFile) + Dextop_Cover256Suffix).c_str());
             ui->get_results()->set_row_data(i, newResult);
-            cout << "image-set row " << i << endl;
+            dtlog << "image-set row " << i << endl;
             //assetManager.ImageLoad(&getRow, std::string("assets/images/covers/") + std::string(uiResults[i].coverFile));
         }
     });
 }
 
+nlohmann::json GetSettings()
+{
+    if (std::filesystem::exists(std::filesystem::path("settings.json")))
+    {   //the file exists, load it
+        std::ifstream loadSettings("settings.json");
+        json settings = json::parse(loadSettings);
+        loadSettings.close();
+
+        //validate the contents
+        if (!settings.contains("authCID") || !settings["authCID"].is_string())
+        {
+            dtlog << "Setting \"authCID\" missing or invalid. Resetting." << endl;
+            settings["authCID"] = "";
+        }
+        if (!settings.contains("authCSecret") || !settings["authCSecret"].is_string())
+        {
+            dtlog << "Setting \"authCSecret\" missing or invalid. Resetting." << endl;
+            settings["authCSecret"] = "";
+        }
+        if (!settings.contains("authPassword") || !settings["authPassword"].is_string())
+        {
+            dtlog << "Setting \"authPassword\" missing or invalid. Resetting." << endl;
+            settings["authPassword"] = "";
+        }
+        if (!settings.contains("authUsername") || !settings["authUsername"].is_string())
+        {
+            dtlog << "Setting \"authUsername\" missing or invalid. Resetting." << endl;
+            settings["authUsername"] = "";
+        }
+        if (!settings.contains("mainWindowWidth") || !settings["mainWindowWidth"].is_number_integer())
+        {
+            dtlog << "Setting \"mainWindowWidth\" missing or invalid. Resetting." << endl;
+            settings["mainWindowWidth"] = 480;
+        }
+        if (!settings.contains("mainWindowHeight") || !settings["mainWindowHeight"].is_number_integer())
+        {
+            dtlog << "Setting \"mainWindowHeight\" missing or invalid. Resetting." << endl;
+            settings["mainWindowHeight"] = 320;
+        }
+
+        return settings;
+    }
+    
+    //create new settings file
+    dtlog << "Settings not found, creating...";
+    json makeSettings = {
+        {"authCID", ""},
+        {"authCSecret", ""},
+        {"authPassword", ""},
+        {"authUsername", ""},
+        {"mainWindowWidth", 480},
+        {"mainWindowHeight", 320}
+    };
+    std::ofstream saveSettings("settings.json", std::ofstream::trunc);
+    saveSettings << std::setw(4) << makeSettings << std::endl;
+    saveSettings.close();
+    dtlog << " done." << endl;
+    return makeSettings;
+}
+
 int main(int argc, char **argv)
 {
-    logger.Initialize();
-
     //load settings
-    std::ifstream settingsFS("settings.json");
-    json settings = json::parse(settingsFS);
-    settingsFS.close();
+    json settings = GetSettings();
 
     ui->set_authUsername(settings["authUsername"].get<string>().c_str());
     ui->set_authPassword(settings["authPassword"].get<string>().c_str());
     ui->set_authCID(settings["authCID"].get<string>().c_str());
     ui->set_authCSecret(settings["authCSecret"].get<string>().c_str());
     slint::Size<uint32_t> windowSize;
-    windowSize.width = settings["mainWindowSizeX"].get<int>();
-    windowSize.height = settings["mainWindowSizeY"].get<int>();
+    windowSize.width = settings["mainWindowWidth"].get<int>();
+    windowSize.height = settings["mainWindowHeight"].get<int>();
     ui->window().set_size(slint::PhysicalSize(windowSize));
 
-    cout << "Settings loaded." << endl;
+    dtlog << "Settings loaded." << endl;
     
     //UI
+    ui->set_platform(
+#ifdef _WIN64
+        "windows"
+#elif __MACH__
+        "macos"
+#elif __linux__
+        "linux"
+#endif
+    );
+
     ui->on_openManga([&](slint::SharedString mangaID) {
         InitReader(mangaID, localDexxor);
     });
 
     ui->on_getUpdates([&](){
-        cout << "updates feature not done yet" << endl;
+        dtlog << "updates feature not done yet" << endl;
     });
     
     ui->on_doSearch([&]{
@@ -147,11 +213,16 @@ int main(int argc, char **argv)
 
     ui->on_openConsole([&]{
         AllocConsole();
-        freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
+        FILE* outDummy;
+        freopen_s(&outDummy, "CONOUT$", "w", stdout);
+        freopen_s(&outDummy, "CONOUT$", "w", stderr);
+        std::cout.clear();
+        std::clog.clear();
+        std::cerr.clear();
         ui->set_consoleOpen(true);
     });
 
-    ui->on_doAuthenticate([&]{
+    ui->on_authenticate([&]{
         localDexxor.Authenticate(
             ui->get_authUsername().data(),
             ui->get_authPassword().data(),
@@ -160,30 +231,30 @@ int main(int argc, char **argv)
         );
     });
 
-    ui->on_authStatus([&]{
-        cout << "Authenticated: " << (localDexxor.Authenticated() == true ? "yes" : "no") << endl;
+    ui->on_checkAuthStatus([&]{
+        dtlog << "Authenticated: " << (localDexxor.Authenticated() == true ? "yes" : "no") << endl;
         if (localDexxor.Authenticated() == true)
         {
-            cout << "Access Token: " << localDexxor.accessToken << endl;
-            cout << "Refresh Token: " << localDexxor.refreshToken << endl;
-            cout << "Access Token age (s): " << localDexxor.AccessTokenAge() << endl;
+            dtlog << "Access Token: " << localDexxor.accessToken << endl;
+            dtlog << "Refresh Token: " << localDexxor.refreshToken << endl;
+            dtlog << "Access Token age (s): " << localDexxor.AccessTokenAge() << endl;
         }
     });
 
-    ui->on_reAuthenticate([&]{
+    ui->on_refreshAccessToken([&]{
         localDexxor.RefreshAccessToken();
     });
 
     ui->run();
 
-    cout << "finishing up" << endl;
+    dtlog << "Shutting down..." << endl;
 
     //store settings
-    settings["mainWindowSizeX"] = ui->window().size().width;
-    settings["mainWindowSizeY"] = ui->window().size().height;
+    settings["mainWindowWidth"] = ui->window().size().width;
+    settings["mainWindowHeight"] = ui->window().size().height;
     std::ofstream settingsSave("settings.json", std::ofstream::trunc);
     settingsSave << std::setw(4) << settings << std::endl;
     settingsSave.close();
-    cout << "settings saved" << endl;
+    dtlog << "settings saved" << endl;
     return 0;
 }
