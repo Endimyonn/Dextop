@@ -2,7 +2,6 @@
 #include "Dextop_Defs.h"
 #include "Logger.h"
 
-
 #include <iostream>
 #include <curl/curl.h>
 
@@ -245,7 +244,7 @@ nlohmann::json Dexxor::Search(std::string argTitle, unsigned short limit, unsign
 	return responseJson;
 }
 
-nlohmann::json Dexxor::GetChapters(std::string mangaID)
+nlohmann::json Dexxor::GetChapters(std::string mangaID, std::string limit, std::string offset)
 {
 	//prepare
 	CURL* curl = curl_easy_init();
@@ -258,7 +257,8 @@ nlohmann::json Dexxor::GetChapters(std::string mangaID)
 
 	//set url
 	std::string url = std::string("https://api.mangadex.org/chapter?") +
-									+ "limit=100"
+									+ "limit=" + limit
+									+ "&offset=" + offset
 									+ "&manga=" + mangaID
 									+ "&translatedLanguage%5B%5D=" + "en"
 									+ "&contentRating%5B%5D=" + "safe"

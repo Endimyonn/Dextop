@@ -3,8 +3,10 @@
 #include "Logger.h"
 
 #include "stdio.h"
+#include <algorithm>
 #include <iostream>
 #include <filesystem>
+#include <thread>
 #include <curl/curl.h>
 #include <windows.h>
 
@@ -46,13 +48,47 @@ size_t WriteAsset(void* ptr, size_t size, size_t nmemb, void* outFile)
     return fwrite(ptr, size, nmemb, (FILE*)outFile);
 }
 
+/// @brief Locks an asset path for reading/writing while being downloaded
+/// @param path The local path of the asset
+/// @return True if it was locked successfully, false if it's been locked elsewhere
+bool AssetManager::AddAssetFetchLock(std::string path)
+{
+    if (std::find(assetFetchLocks.begin(), assetFetchLocks.end(), path) != assetFetchLocks.end())
+    {
+        assetFetchLocks.push_back(path);
+        dtlog << "assetFetchLocks +" << path << std::endl;
+        return true;
+    }
+    return false;
+}
+
+void AssetManager::RemoveAssetFetchLock(std::string path)
+{
+    std::vector<std::string>::iterator getElement = std::find(assetFetchLocks.begin(), assetFetchLocks.end(), path);
+    if (getElement != assetFetchLocks.end())
+    {
+        assetFetchLocks.erase(getElement);
+    }
+    dtlog << "assetFetchLocks -" << path << std::endl;
+}
+
+/// @brief Checks if an asset path is locked
+/// @param path The local path of the asset
+/// @return True if it's currently locked, otherwise false
+bool AssetManager::AssetFetchLocked(std::string path)
+{
+    return std::find(assetFetchLocks.begin(), assetFetchLocks.end(), path) != assetFetchLocks.end();
+}
+
 void AssetManager::GetImage(std::string url, std::string path)
 {
-    if (std::filesystem::exists((assetsRoot + path).c_str()))
+    if (std::filesystem::exists((assetsRoot + path).c_str())
+        || AssetFetchLocked(path))
     {
-        dtlog << "File " << path << " exists already" << std::endl;
         return;
     }
+    AddAssetFetchLock(std::string(assetsRoot + path));
+
     FILE *outFile = fopen((assetsRoot + path).c_str(), "wb");
     CURL* curl = curl_easy_init();
 	CURLcode result;
@@ -69,6 +105,7 @@ void AssetManager::GetImage(std::string url, std::string path)
 	}
     curl_easy_cleanup(curl);
     fclose(outFile);
+    RemoveAssetFetchLock(path);
 }
 
 void AssetManager::GetChapterPage(std::string url, std::string fileName)
@@ -81,7 +118,20 @@ void AssetManager::GetMangaCover(std::string url, std::string fileName)
     GetImage(url, std::string("images/covers/") + fileName);
 }
 
-void AssetManager::ImageLoad(std::optional<SearchResult>* result, std::string path)
+/// @brief hga
+/// @param result feaw
+/// @param path feaw
+void AssetManager::ImageLoadWR(slint::Image* result, std::string path)
 {
-    
+    if (std::filesystem::exists((assetsRoot + path).c_str()))
+    {
+        while (AssetFetchLocked(path) == true)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        dtlog << "preparing to hotswap image " << path << std::endl;
+        slint::Image loadImage = slint::Image::load_from_path(path.c_str());
+        result = &loadImage;
+        dtlog << "image hotswap completed: " << path << std::endl;
+    }
 }

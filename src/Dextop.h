@@ -1,3 +1,4 @@
+/// Primary controller of the program, responsible for bootstrapping everything else.
 #pragma once
 
 #include <iostream>

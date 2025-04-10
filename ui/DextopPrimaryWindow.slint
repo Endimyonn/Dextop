@@ -1,4 +1,4 @@
-import { Button, VerticalBox, Spinner, LineEdit, ListView, TabWidget, StandardTableView, ScrollView, HorizontalBox } from "std-widgets.slint";
+import { Button, VerticalBox, Spinner, LineEdit, ListView, TabWidget, StandardTableView, ScrollView, HorizontalBox, ProgressIndicator } from "std-widgets.slint";
 
 
 
@@ -17,7 +17,7 @@ export component DextopPrimaryWindow inherits Window {
     max-width: 9999px;
     max-height: 9999px;
 
-    out property<int> tab: 3;
+    out property<int> tab: 2;
 
     callback getUpdates();
 
@@ -33,14 +33,14 @@ export component DextopPrimaryWindow inherits Window {
 
     callback openManga(string);
 
-    in property<string> platform: "";
+    in property<string> platform: "windows";
     in property<bool> consoleOpen: false;
     in-out property<string> authUsername;
     in-out property<string> authPassword;
     in-out property<string> authCID;
     in-out property<string> authCSecret;
     callback openConsole();
-    callback openLog();
+    callback openLogFile();
     callback authenticate();
     callback checkAuthStatus();
     callback refreshAccessToken();
@@ -158,6 +158,7 @@ export component DextopPrimaryWindow inherits Window {
                             enabled: searchLoading == false;
                             clicked => {
                                 root.doSearch();
+                                root.page = 1;
                             }
                         }
                     }
@@ -230,7 +231,7 @@ export component DextopPrimaryWindow inherits Window {
                                         Button {
                                             text: "Read";
                                             height: 32px;
-                                            clicked => {root.openManga(data.title)}
+                                            clicked => {root.openManga(data.id)}
                                         }
     
                                         Button {
@@ -325,21 +326,22 @@ export component DextopPrimaryWindow inherits Window {
                             }
 
                         // Log opener
-                        HorizontalLayout {
-                            alignment: stretch;
-                            height: 40px;
-                            Text {
-                                text: "Log file";
-                                vertical-alignment: center;
+                        if root.platform == "windows":
+                            HorizontalLayout {
+                                alignment: stretch;
+                                height: 40px;
+                                Text {
+                                    text: "Log file";
+                                    vertical-alignment: center;
+                                }
+                                Button {
+                                    width: 96px;
+                                    height: 32px;
+                                    y: 4px;
+                                    text: "Open";
+                                    clicked => {root.openLogFile()}
+                                }
                             }
-                            Button {
-                                width: 96px;
-                                height: 32px;
-                                y: 4px;
-                                text: "Open";
-                                clicked => {root.openLog()}
-                            }
-                        }
     
                         Text {
                             height: 40px;
@@ -467,6 +469,14 @@ export component DextopPrimaryWindow inherits Window {
     }
 }
 
+
+
+export struct ReaderMVChapter {
+    chapter: string,
+    title: string,
+    id: string
+}
+
 export component DextopReaderWindow inherits Window {
     in property<string> readerTitle: "Reader";
     title: readerTitle;
@@ -474,6 +484,8 @@ export component DextopReaderWindow inherits Window {
     min-height: 480px;
     max-width: 9999px;
     max-height: 9999px;
+
+    in property <[ReaderMVChapter]> chapterSet;
 
     callback loadMangaData();
     callback loadChapters();
@@ -531,9 +543,11 @@ export component DextopReaderWindow inherits Window {
         
         
         ListView {
+            y: 4px;
             width: parent.width - 16px;
-            height: parent.height - 8px;
-            for data in [{chapter: "61", title: "It's Japan's Summer, Elf-San!", id: "abcd"}, {chapter: "60", title: "An Encounter with the Hero Candidate Part 5", id: "efgh"}] : Rectangle {
+            height: parent.height - 52px;
+            // for data in [{chapter: "61", title: "It's Japan's Summer, Elf-San!", id: "abcd"}, {chapter: "60", title: "An Encounter with the Hero Candidate Part 5", id: "efgh"}] : Rectangle {
+            for data in chapterSet : Rectangle {
                 height: 72px;
                 Rectangle {
                     height: 64px;
@@ -554,6 +568,33 @@ export component DextopReaderWindow inherits Window {
                         text: "Read";
                     }
                 }
+            }
+        }
+
+        // Page Navigation
+        HorizontalLayout {
+            y: parent.height - 40px;
+            height: 32px;
+            alignment: LayoutAlignment.center;
+            Button {
+                text: "<";
+                width: self.height;
+            }
+            Rectangle {
+                width: 16px;
+            }
+            Text {
+                text: "h";
+                font-size: 16px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            Rectangle {
+                width: 16px;
+            }
+            Button {
+                text: ">";
+                width: self.height;
             }
         }
     }

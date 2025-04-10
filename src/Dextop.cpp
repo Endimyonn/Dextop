@@ -96,10 +96,10 @@ void DoTitleSearch(std::string title, unsigned short limit = 10, unsigned short 
             newResult.title = ui->get_results()->row_data(i)->title;
             newResult.description = ui->get_results()->row_data(i)->description;
             newResult.coverFile = ui->get_results()->row_data(i)->coverFile;
-            newResult.cover = slint::Image::load_from_path((std::string("assets/images/covers/") + std::string(ui->get_results()->row_data(i)->coverFile) + Dextop_Cover256Suffix).c_str());
+            newResult.cover = slint::Image::load_from_path("assets/images/placeholders/cover-low.png");
             ui->get_results()->set_row_data(i, newResult);
             dtlog << "image-set row " << i << endl;
-            //assetManager.ImageLoad(&getRow, std::string("assets/images/covers/") + std::string(uiResults[i].coverFile));
+            //assetManager.ImageLoadWR(&newResult.cover, std::string("assets/images/covers/") + std::string(uiResults[i].coverFile));
         }
     });
 }

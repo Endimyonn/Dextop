@@ -10,8 +10,6 @@ if (NOT Slint_FOUND)
   FetchContent_Declare(
     Slint
     GIT_REPOSITORY https://github.com/slint-ui/slint.git
-    # `release/1` will auto-upgrade to the latest Slint >= 1.0.0 and < 2.0.0
-    # `release/1.0` will auto-upgrade to the latest Slint >= 1.0.0 and < 1.1.0
     GIT_TAG release/1
     SOURCE_SUBDIR api/cpp
   )
@@ -28,14 +26,14 @@ target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC include)
 
 # console
 if(WIN32)
-    set_target_properties(${CMAKE_PROJECT_NAME}
-    PROPERTIES
-        LINK_FLAGS_DEBUG "/SUBSYSTEM:CONSOLE"
-        LINK_FLAGS_RELEASE "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup"
-    )
+  set_target_properties(${CMAKE_PROJECT_NAME}
+  PROPERTIES
+    LINK_FLAGS_DEBUG "/SUBSYSTEM:CONSOLE"
+    LINK_FLAGS_RELEASE "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup"
+  )
 endif(WIN32)
 
 # On Windows, copy the Slint DLL next to the application binary so that it's found.
 if (WIN32)
-    add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:${CMAKE_PROJECT_NAME}> $<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}> COMMAND_EXPAND_LISTS)
+  add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:${CMAKE_PROJECT_NAME}> $<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}> COMMAND_EXPAND_LISTS)
 endif()
