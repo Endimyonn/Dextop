@@ -1,115 +1,20 @@
 #include "Dextop.h"
 #include "Dextop_Defs.h"
+#include "uicon/MainSearch.h"
+#include "uicon/Reader.h"
 #include <windows.h>
 #include <filesystem>
 
 using namespace std;
-using json = nlohmann::json;
 
-Logger logger(std::string("Dextop.log"));
-Dexxor localDexxor;
-AssetManager assetManager;
-static slint::ComponentHandle<DextopPrimaryWindow> ui = DextopPrimaryWindow::create();
+static Dextop dextop;
 
-string url_encode(const string &value) {
-    ostringstream escaped;
-    escaped.fill('0');
-    escaped << hex;
-
-    for (string::const_iterator i = value.begin(), n = value.end(); i != n; ++i) {
-        string::value_type c = (*i);
-
-        // Keep alphanumeric and other accepted characters intact
-        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
-            escaped << c;
-            continue;
-        }
-
-        // Any other characters are percent-encoded
-        escaped << uppercase;
-        escaped << '%' << setw(2) << int((unsigned char) c);
-        escaped << nouppercase;
-    }
-
-    return escaped.str();
-}
-
-void DoTitleSearch(std::string title, unsigned short limit = 10, unsigned short page = 0)
-{
-    slint::invoke_from_event_loop([=](){
-        ui->set_results(std::make_shared<slint::VectorModel<SearchResult>>(std::vector<SearchResult>()));
-        ui->set_searchLoading(true);
-        ui->set_currentSearch(slint::SharedString(title));
-    });
-    auto doSearch = std::async(&Dexxor::Search, &localDexxor, url_encode(title), limit, page);
-    json searchResults = doSearch.get();
-    size_t resultCount = searchResults["data"].size();
-    dtlog << "Search for \"" << title << "\": found " << resultCount << " (limit: " << limit << ", page: " << page << ", total: " << searchResults["total"] << ")" << endl;
-
-    //pass data to the UI
-    std::vector<SearchResult> uiResults;
-    for (int i = 0; i < resultCount; i++)
-    {
-        json resultInfo = searchResults["data"][i];
-        
-        SearchResult makeResult;
-        makeResult.title = resultInfo["attributes"]["title"].begin().value();
-        if (resultInfo["attributes"]["description"].size() > 0)
-        {
-            makeResult.description = resultInfo["attributes"]["description"].begin().value();
-        }
-        else
-        {
-            makeResult.description = "(no description available)";
-        }
-        makeResult.id = resultInfo["id"].get<string>();
-        for (int j = 0; j < resultInfo["relationships"].size(); j++)
-        {
-            if (resultInfo["relationships"][j]["type"].get<string>() == "cover_art")
-            {
-                makeResult.coverFile = resultInfo["relationships"][j]["attributes"]["fileName"].begin().value();
-                std::string coverURL = std::string("https://uploads.mangadex.org/covers/") + std::string(makeResult.id) + "/" + resultInfo["relationships"][j]["attributes"]["fileName"].get<string>() + Dextop_Cover256Suffix;
-                dtlog << "adapted coverURL: " << coverURL << endl;
-                assetManager.GetMangaCover(coverURL, resultInfo["relationships"][j]["attributes"]["fileName"].get<string>() + Dextop_Cover256Suffix);
-            }
-        }
-        uiResults.push_back(makeResult);
-    }
-    slint::invoke_from_event_loop([=](){
-        ui->set_results(std::make_shared<slint::VectorModel<SearchResult>>(uiResults));
-        ui->set_searchLoading(false);
-
-        int fLimit = searchResults["limit"].get<int>();
-        int fTotal = searchResults["total"].get<int>();
-        int pageCount = 0;
-        if (fTotal > 0)
-        {
-            div_t pageDiv = std::div(fTotal, fLimit);
-            pageCount = pageDiv.quot + (pageDiv.rem > 0 ? 1 : 0);
-        }
-        ui->set_pageCount(pageCount);
-
-        for (int i = 0; i < resultCount; i++)
-        {
-            SearchResult newResult;
-            newResult.id = ui->get_results()->row_data(i)->id;
-            newResult.title = ui->get_results()->row_data(i)->title;
-            newResult.description = ui->get_results()->row_data(i)->description;
-            newResult.coverFile = ui->get_results()->row_data(i)->coverFile;
-            newResult.cover = slint::Image::load_from_path("assets/images/placeholders/cover-low.png");
-            ui->get_results()->set_row_data(i, newResult);
-            dtlog << "image-set row " << i << endl;
-            //assetManager.ImageLoadWR(&newResult.cover, std::string("assets/images/covers/") + std::string(uiResults[i].coverFile));
-        }
-    });
-}
-
-nlohmann::json GetSettings()
+nlohmann::json Dextop::LoadSettings()
 {
     if (std::filesystem::exists(std::filesystem::path("settings.json")))
     {   //the file exists, load it
         std::ifstream loadSettings("settings.json");
-        json settings = json::parse(loadSettings);
+        nlohmann::json settings = nlohmann::json::parse(loadSettings);
         loadSettings.close();
 
         //validate the contents
@@ -133,12 +38,37 @@ nlohmann::json GetSettings()
             dtlog << "Setting \"authUsername\" missing or invalid. Resetting." << endl;
             settings["authUsername"] = "";
         }
-        if (!settings.contains("mainWindowWidth") || !settings["mainWindowWidth"].is_number_integer())
+        if (!settings.contains("authLastAccessToken") || !settings["authLastAccessToken"].is_string())
+        {
+            dtlog << "Setting \"authLastAccessToken\" missing or invalid. Resetting." << endl;
+            settings["authLastAccessToken"] = "";
+        }
+        if (!settings.contains("authLastRefreshToken") || !settings["authLastRefreshToken"].is_string())
+        {
+            dtlog << "Setting \"authLastRefreshToken\" missing or invalid. Resetting." << endl;
+            settings["authLastRefreshToken"] = "";
+        }
+        if (!settings.contains("authLastSuccessTime") || !settings["authLastSuccessTime"].is_number())
+        {
+            dtlog << "Setting \"authLastSuccessTime\" missing or invalid. Resetting." << endl;
+            settings["authLastSuccessTime"] = 0;
+        }
+        if (!settings.contains("authLastSuccessCID") || !settings["authLastSuccessCID"].is_string())
+        {
+            dtlog << "Setting \"authLastSuccessCID\" missing or invalid. Resetting." << endl;
+            settings["authLastSuccessCID"] = "";
+        }
+        if (!settings.contains("authLastSuccessCSecret") || !settings["authLastSuccessCSecret"].is_string())
+        {
+            dtlog << "Setting \"authLastSuccessCSecret\" missing or invalid. Resetting." << endl;
+            settings["authLastSuccessCSecret"] = "";
+        }
+        if (!settings.contains("mainWindowWidth") || !settings["mainWindowWidth"].is_number())
         {
             dtlog << "Setting \"mainWindowWidth\" missing or invalid. Resetting." << endl;
             settings["mainWindowWidth"] = 480;
         }
-        if (!settings.contains("mainWindowHeight") || !settings["mainWindowHeight"].is_number_integer())
+        if (!settings.contains("mainWindowHeight") || !settings["mainWindowHeight"].is_number())
         {
             dtlog << "Setting \"mainWindowHeight\" missing or invalid. Resetting." << endl;
             settings["mainWindowHeight"] = 320;
@@ -149,11 +79,16 @@ nlohmann::json GetSettings()
     
     //create new settings file
     dtlog << "Settings not found, creating...";
-    json makeSettings = {
+    nlohmann::json makeSettings = {
         {"authCID", ""},
         {"authCSecret", ""},
         {"authPassword", ""},
         {"authUsername", ""},
+        {"authLastAccessToken", ""},
+        {"authLastRefreshToken", ""},
+        {"authLastSuccessTime", 0},
+        {"authLastSuccessCID", ""},
+        {"authLastSuccessCSecret", ""},
         {"mainWindowWidth", 480},
         {"mainWindowHeight", 320}
     };
@@ -164,11 +99,14 @@ nlohmann::json GetSettings()
     return makeSettings;
 }
 
-int main(int argc, char **argv)
+Dextop* Dextop::GetInstance()
+{
+    return instance;
+}
+
+void Dextop::Run()
 {
     //load settings
-    json settings = GetSettings();
-
     ui->set_authUsername(settings["authUsername"].get<string>().c_str());
     ui->set_authPassword(settings["authPassword"].get<string>().c_str());
     ui->set_authCID(settings["authCID"].get<string>().c_str());
@@ -192,7 +130,7 @@ int main(int argc, char **argv)
     );
 
     ui->on_openManga([&](slint::SharedString mangaID) {
-        InitReader(mangaID, localDexxor);
+        InitReader(mangaID, dexxor);
     });
 
     ui->on_getUpdates([&](){
@@ -200,15 +138,23 @@ int main(int argc, char **argv)
     });
     
     ui->on_doSearch([&]{
-        std::thread(DoTitleSearch, ui->get_searchTarget().data(), 10, 0).detach();
+        const char* getTarget = ui->get_searchTarget().data();
+        dtThreadPool.detach_task([=]
+        {
+            DTMainSearchController::DoTitleSearch(getTarget, 10, 0);
+        });
     });
 
     ui->on_changeSearchPage([&](int newPage){
-        std::thread(DoTitleSearch, ui->get_currentSearch().data(), 10, newPage - 1).detach();
+        const char* getTarget = ui->get_searchTarget().data();
+        dtThreadPool.detach_task([=]
+        {
+            DTMainSearchController::DoTitleSearch(getTarget, 10, newPage - 1);
+        });
     });
 
     ui->on_searchListingChapters([&](slint::SharedString id){
-        localDexxor.GetChapters(id.data());
+        dexxor.GetChapters(id.data());
     });
 
     ui->on_openConsole([&]{
@@ -223,7 +169,7 @@ int main(int argc, char **argv)
     });
 
     ui->on_authenticate([&]{
-        localDexxor.Authenticate(
+        dexxor.Authenticate(
             ui->get_authUsername().data(),
             ui->get_authPassword().data(),
             ui->get_authCID().data(),
@@ -232,17 +178,17 @@ int main(int argc, char **argv)
     });
 
     ui->on_checkAuthStatus([&]{
-        dtlog << "Authenticated: " << (localDexxor.Authenticated() == true ? "yes" : "no") << endl;
-        if (localDexxor.Authenticated() == true)
+        dtlog << "Authenticated: " << (dexxor.Authenticated() == true ? "yes" : "no") << endl;
+        if (dexxor.Authenticated() == true)
         {
-            dtlog << "Access Token: " << localDexxor.accessToken << endl;
-            dtlog << "Refresh Token: " << localDexxor.refreshToken << endl;
-            dtlog << "Access Token age (s): " << localDexxor.AccessTokenAge() << endl;
+            dtlog << "Access Token: " << dexxor.accessToken << endl;
+            dtlog << "Refresh Token: " << dexxor.refreshToken << endl;
+            dtlog << "Access Token age (s): " << dexxor.AccessTokenAge() << endl;
         }
     });
 
     ui->on_refreshAccessToken([&]{
-        localDexxor.RefreshAccessToken();
+        dexxor.RefreshAccessToken();
     });
 
     ui->run();
@@ -256,5 +202,10 @@ int main(int argc, char **argv)
     settingsSave << std::setw(4) << settings << std::endl;
     settingsSave.close();
     dtlog << "settings saved" << endl;
+}
+
+int main(int argc, char **argv)
+{
+    dextop.Run();
     return 0;
 }

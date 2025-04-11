@@ -3,21 +3,37 @@
 
 #include <iostream>
 #include <fstream>
-#include <sstream>
 #include <future>
 #include <filesystem>
 
+#include "ThreadPool.h"
 #include "Dexxor.h"
 #include "AssetManager.h"
 #include "Logger.h"
 #include "DextopPrimaryWindow.h"
-#include "Reader.h"
 
 class Dextop
 {
+	private:
+		inline static Dextop* instance = nullptr;
+
+		nlohmann::json LoadSettings();
 	public:
-		Logger logger;
-		Dexxor localDexxor;
+		Dextop()
+		{
+			instance = this;
+
+			dexxor.Initialize();
+		}
+
+		static Dextop* GetInstance();
+
+		ThreadPoolContainer threadPool;
+		Logger logger = Logger(std::string("Dextop.log"));
+		nlohmann::json settings = LoadSettings();
+		Dexxor dexxor;
 		AssetManager assetManager;
-		static slint::ComponentHandle<DextopPrimaryWindow> ui;
+		slint::ComponentHandle<DextopPrimaryWindow> ui = DextopPrimaryWindow::create();
+
+		void Run();
 };

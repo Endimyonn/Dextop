@@ -53,7 +53,7 @@ size_t WriteAsset(void* ptr, size_t size, size_t nmemb, void* outFile)
 /// @return True if it was locked successfully, false if it's been locked elsewhere
 bool AssetManager::AddAssetFetchLock(std::string path)
 {
-    if (std::find(assetFetchLocks.begin(), assetFetchLocks.end(), path) != assetFetchLocks.end())
+    if (std::find(assetFetchLocks.begin(), assetFetchLocks.end(), path) == assetFetchLocks.end())
     {
         assetFetchLocks.push_back(path);
         dtlog << "assetFetchLocks +" << path << std::endl;
@@ -82,12 +82,10 @@ bool AssetManager::AssetFetchLocked(std::string path)
 
 void AssetManager::GetImage(std::string url, std::string path)
 {
-    if (std::filesystem::exists((assetsRoot + path).c_str())
-        || AssetFetchLocked(path))
+    if (std::filesystem::exists((assetsRoot + path).c_str()))
     {
         return;
     }
-    AddAssetFetchLock(std::string(assetsRoot + path));
 
     FILE *outFile = fopen((assetsRoot + path).c_str(), "wb");
     CURL* curl = curl_easy_init();
@@ -99,13 +97,12 @@ void AssetManager::GetImage(std::string url, std::string path)
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, Dextop_UserAgent);
 
     result = curl_easy_perform(curl);
+    fclose(outFile);
 	if (result != CURLE_OK)
 	{
 		dtlog << "Request failed: " << curl_easy_strerror(result) << std::endl;
 	}
     curl_easy_cleanup(curl);
-    fclose(outFile);
-    RemoveAssetFetchLock(path);
 }
 
 void AssetManager::GetChapterPage(std::string url, std::string fileName)
@@ -118,20 +115,20 @@ void AssetManager::GetMangaCover(std::string url, std::string fileName)
     GetImage(url, std::string("images/covers/") + fileName);
 }
 
-/// @brief hga
-/// @param result feaw
-/// @param path feaw
-void AssetManager::ImageLoadWR(slint::Image* result, std::string path)
+slint::Image AssetManager::ImageLoadWR(std::string path)
 {
-    if (std::filesystem::exists((assetsRoot + path).c_str()))
+    while (!std::filesystem::exists((assetsRoot + path).c_str()))
     {
-        while (AssetFetchLocked(path) == true)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-        dtlog << "preparing to hotswap image " << path << std::endl;
-        slint::Image loadImage = slint::Image::load_from_path(path.c_str());
-        result = &loadImage;
-        dtlog << "image hotswap completed: " << path << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+    while (std::filesystem::file_size((assetsRoot + path).c_str()) == 0)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    while (AssetFetchLocked(path) == true)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    slint::Image loadImage = slint::Image::load_from_path((assetsRoot + path).c_str());
+    return loadImage;
 }

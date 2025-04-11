@@ -24,7 +24,7 @@ export component DextopPrimaryWindow inherits Window {
     in-out property<string> searchTarget: "";
     in-out property<bool> searchLoading: false;
     in-out property<string> currentSearch: "";
-    in property<[SearchResult]> results;
+    in-out property<[SearchResult]> results;
     in property<int> pageCount: 1;
     in-out property<int> page: 1;
     callback doSearch();

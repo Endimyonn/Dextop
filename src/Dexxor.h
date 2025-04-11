@@ -7,7 +7,7 @@
 class Dexxor
 {
 public:
-    Dexxor();
+    void Initialize();
 	void Shutdown();
 
 	std::string accessToken;

@@ -1,4 +1,5 @@
 #include "Dexxor.h"
+#include "Dextop.h"
 #include "Dextop_Defs.h"
 #include "Logger.h"
 
@@ -13,9 +14,9 @@ using json = nlohmann::json;
 bool authenticated = false;
 std::string accessToken;
 std::string refreshToken;
+time_t tokenTime = 0;
 std::string tokenCID;
 std::string tokenCSecret;
-std::chrono::steady_clock::time_point tokenTime;
 
 
 // copy received data to a string 
@@ -25,10 +26,27 @@ size_t WriteCallback(char* argReceivedData, size_t size, size_t nmemb, void* arg
 	return size * nmemb;
 }
 
-Dexxor::Dexxor()
+void Dexxor::Initialize()
 {
 	//initialize curl
 	curl_global_init(CURL_GLOBAL_ALL);
+	dtlog << "Dexxor: curl initialized" << std::endl;
+
+	//pull saved auth info from settings
+	Dextop* dextop = Dextop::GetInstance();
+	accessToken = dextop->settings["authLastAccessToken"];
+	refreshToken = dextop->settings["authLastRefreshToken"];
+	tokenTime = dextop->settings["authLastSuccessTime"].get<time_t>();
+	tokenCID = dextop->settings["authLastSuccessCID"];
+	tokenCSecret = dextop->settings["authLastSuccessCSecret"];
+
+	//attempt to reauthenticate if logged in previously
+	if (refreshToken != "" && AccessTokenExpired())
+	{
+		dtlog << "Refreshing login..." << std::endl;
+		RefreshAccessToken();
+	}
+	
 	dtlog << "Dexxor init done" << std::endl;
 }
 
@@ -80,14 +98,19 @@ void Dexxor::Authenticate(std::string argUsername, std::string argPassword, std:
 
 	json responseJson = json::parse(readBuffer);
 
-	if (responseJson["access_token"] != nullptr)
+	if (responseJson.contains("access_token"))
 	{
 		authenticated = true;
 		accessToken = responseJson["access_token"];
 		refreshToken = responseJson["refresh_token"];
+		time(&tokenTime);
 		tokenCID = argClientID;
 		tokenCSecret = argClientSecret;
-		tokenTime = std::chrono::high_resolution_clock::now();
+		Dextop::GetInstance()->settings["authLastAccessToken"] = accessToken;
+		Dextop::GetInstance()->settings["authLastRefreshToken"] = refreshToken;
+		Dextop::GetInstance()->settings["authLastSuccessTime"] = tokenTime;
+		Dextop::GetInstance()->settings["authLastSuccessCID"] = tokenCID;
+		Dextop::GetInstance()->settings["authLastSuccessCSecret"] = tokenCSecret;
 		cout << "Authentication succeeded." << endl;
 	}
 	else
@@ -103,6 +126,10 @@ void Dexxor::RefreshAccessToken()
 	{
 		dtlog << "Dexxor: access token asked to refresh, but not yet expired! (age: " << AccessTokenAge() << "s)" << std::endl;
 		return;
+	}
+	else if (authenticated == false)
+	{
+		dtlog << "Dexxor: cannot refresh access token because we're not authenticated to begin with" << std::endl;
 	}
 
 	CURL* curl = curl_easy_init();
@@ -131,11 +158,13 @@ void Dexxor::RefreshAccessToken()
 
 	json responseJson = json::parse(readBuffer);
 
-	if (responseJson["access_token"] != nullptr)
+	if (responseJson.contains("access_token"))
 	{
 		authenticated = true;
 		accessToken = responseJson["access_token"];
-		tokenTime = std::chrono::high_resolution_clock::now();
+		time(&tokenTime);
+		Dextop::GetInstance()->settings["authLastAccessToken"] = accessToken;
+		Dextop::GetInstance()->settings["authLastSuccessTime"] = tokenTime;
 		cout << "Reauthentication succeeded." << endl;
 	}
 	else
@@ -147,64 +176,18 @@ void Dexxor::RefreshAccessToken()
 
 int Dexxor::AccessTokenAge()
 {
-	return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - tokenTime).count();
+	time_t now;
+	time(&now);
+	return now - tokenTime;
 }
 
 bool Dexxor::AccessTokenExpired()
 {
-	return AccessTokenAge() >= 900;
-}
-
-void RefreshToken()
-{
-	//prepare
-	CURL* curl = curl_easy_init();
-	CURLcode result;
-	std::string readBuffer = "";
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-	curl_easy_setopt(curl, CURLOPT_USERAGENT, Dextop_UserAgent);
-	curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 100);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-
-	//set url
-	curl_easy_setopt(curl, CURLOPT_URL, "https://auth.mangadex.org/realms/mangadex/protocol/openid-connect/token");
-
-	//set data
-	std::string fields = std::string("grant_type=refresh_token")
-		+ "&refresh_token=" + refreshToken
-		+ "&client_id=" + tokenCID
-		+ "&client_secret=" + tokenCSecret;
-	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, fields.c_str());
-
-	result = curl_easy_perform(curl);
-	if (result != CURLE_OK)
+	if (tokenTime != 0)
 	{
-		cout << "Token refresh request failed: " << curl_easy_strerror(result) << endl;
-		return;
+		return AccessTokenAge() >= 899;
 	}
-
-	json responseJson = json::parse(readBuffer);
-
-	if (responseJson["access_token"] != nullptr)
-	{
-		authenticated = true;
-		accessToken = responseJson["access_token"];
-		tokenTime = std::chrono::high_resolution_clock::now();
-		cout << "Token refresh succeeded." << endl;
-	}
-	else
-	{
-		authenticated = false;
-		cout << "Authentication failed. Reason: ";
-		if (responseJson["error"] == "invalid_client")
-		{
-			cout << "invalid credentials. Check provided information." << endl;
-		}
-		else
-		{
-			cout << responseJson["error"] << endl << responseJson;
-		}
-	}
+	return true;
 }
 
 nlohmann::json Dexxor::Search(std::string argTitle, unsigned short limit, unsigned short page)
@@ -236,7 +219,7 @@ nlohmann::json Dexxor::Search(std::string argTitle, unsigned short limit, unsign
 
 	json responseJson = json::parse(readBuffer);
 
-	if (responseJson["error"] != nullptr)
+	if (responseJson.contains("error"))
 	{
 		cout << "Search request failed. Reason: " << responseJson["error"] << endl;
 	}
@@ -278,7 +261,7 @@ nlohmann::json Dexxor::GetChapters(std::string mangaID, std::string limit, std::
 	json responseJson = json::parse(readBuffer);
 	dtlog << responseJson << std::endl;
 
-	if (responseJson["error"] != nullptr)
+	if (responseJson.contains("error"))
 	{
 		cout << "Search request failed. Reason: " << responseJson["error"] << endl;
 	}
@@ -311,7 +294,7 @@ nlohmann::json Dexxor::GetUpdates(unsigned short limit, unsigned short page)
 
 	json responseJson = json::parse(readBuffer);
 
-	if (responseJson["error"] != nullptr)
+	if (responseJson.contains("error"))
 	{
 		cout << "Feed request failed. Reason: " << responseJson["error"] << endl;
 	}
@@ -341,7 +324,7 @@ nlohmann::json Dexxor::GetChapterImageMeta(std::string chapterID)
 
 	json responseJson = json::parse(readBuffer);
 
-	if (responseJson["error"] != nullptr)
+	if (responseJson.contains("error"))
 	{
 		cout << "Search request failed. Reason: " << responseJson["error"] << endl;
 	}

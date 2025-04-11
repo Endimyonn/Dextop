@@ -15,6 +15,18 @@ class Logger
 			Log = this;
 		}
 
+		Logger()
+		{
+			stream = std::ofstream("program.log", std::ofstream::trunc);
+			Log = this;
+		}
+
+		Logger& operator=(const Logger&)
+		{
+			stream = std::ofstream("program.log", std::ofstream::trunc);
+			Log = this;
+		}
+
 		~Logger()
 		{
 			stream.close();

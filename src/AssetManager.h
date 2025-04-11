@@ -17,7 +17,7 @@ class AssetManager
         void GetChapterPage(std::string url, std::string fileName);
         void GetMangaCover(std::string url, std::string fileName);
 
-        void ImageLoadWR(slint::Image* result, std::string path);
+        slint::Image ImageLoadWR(std::string path);
     private:
         void CreateDirectorySkeleton(std::string baseDir);
         std::vector<std::string> assetFetchLocks;
