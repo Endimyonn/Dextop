@@ -6,6 +6,7 @@
 using namespace std;
 using json = nlohmann::json;
 
+ThreadPoolContainer threadPool;
 Logger logger(std::string("Dextop.log"));
 Dexxor localDexxor;
 AssetManager assetManager;

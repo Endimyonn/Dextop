@@ -7,6 +7,7 @@
 #include <future>
 #include <filesystem>
 
+#include "ThreadPool.h"
 #include "Dexxor.h"
 #include "AssetManager.h"
 #include "Logger.h"
@@ -16,6 +17,7 @@
 class Dextop
 {
 	public:
+		ThreadPoolContainer threadPool;
 		Logger logger;
 		Dexxor localDexxor;
 		AssetManager assetManager;
