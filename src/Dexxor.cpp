@@ -249,7 +249,8 @@ nlohmann::json Dexxor::GetChapters(std::string mangaID, std::string limit, std::
 									+ "&contentRating%5B%5D=" + "erotica"
 									+ "&contentRating%5B%5D=" + "pornographic"
 									+ "&includeFutureUpdates=" + "0"
-									+ "&order%5BcreatedAt%5D=asc&order%5BupdatedAt%5D=asc&order%5BpublishAt%5D=asc&order%5BreadableAt%5D=asc&order%5Bvolume%5D=asc&order%5Bchapter%5D=asc";
+									+ "&order%5BcreatedAt%5D=asc&order%5BupdatedAt%5D=asc&order%5BpublishAt%5D=asc&order%5BreadableAt%5D=asc&order%5Bvolume%5D=asc&order%5Bchapter%5D=asc"
+									+ "&includes[]=scanlation_group";
 	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 
 	result = curl_easy_perform(curl);
@@ -259,7 +260,6 @@ nlohmann::json Dexxor::GetChapters(std::string mangaID, std::string limit, std::
 	}
 
 	json responseJson = json::parse(readBuffer);
-	dtlog << responseJson << std::endl;
 
 	if (responseJson.contains("error"))
 	{

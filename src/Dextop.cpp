@@ -129,12 +129,16 @@ void Dextop::Run()
 #endif
     );
 
-    ui->on_openManga([&](slint::SharedString mangaID) {
-        InitReader(mangaID, dexxor);
+    std::vector<DTReaderController*> readerWindows;
+
+    ui->on_openManga([&readerWindows](slint::SharedString json) {
+        DTReaderController* readerController = new DTReaderController(nlohmann::json::parse(json.data()));
+        readerWindows.push_back(readerController);
     });
 
     ui->on_getUpdates([&](){
         dtlog << "updates feature not done yet" << endl;
+        dtlog << "! " << readerWindows[0]->json.dump() << std::endl;
     });
     
     ui->on_doSearch([&]{

@@ -3,10 +3,9 @@ import { Button, VerticalBox, Spinner, LineEdit, ListView, TabWidget, StandardTa
 
 
 export struct SearchResult {
-    id: string,
+    json: string,
     title: string,
     description: string,
-    coverFile: string,
     cover: image
 }
 
@@ -231,13 +230,7 @@ export component DextopPrimaryWindow inherits Window {
                                         Button {
                                             text: "Read";
                                             height: 32px;
-                                            clicked => {root.openManga(data.id)}
-                                        }
-    
-                                        Button {
-                                            text: "Chapters";
-                                            height: 32px;
-                                            clicked => {root.searchListingChapters(data.id)}
+                                            clicked => {root.openManga(data.json)}
                                         }
                                     }
                                 }
@@ -472,9 +465,9 @@ export component DextopPrimaryWindow inherits Window {
 
 
 export struct ReaderMVChapter {
-    chapter: string,
+    id: string,
     title: string,
-    id: string
+    groupName: string
 }
 
 export component DextopReaderWindow inherits Window {
@@ -485,7 +478,11 @@ export component DextopReaderWindow inherits Window {
     max-width: 9999px;
     max-height: 9999px;
 
-    in property <[ReaderMVChapter]> chapterSet;
+    in property<[ReaderMVChapter]> chapterSet: [];
+    in property<string> chapterListBGText: "Loading...";
+    in property<image> coverArt;
+    in property<[string]> authors;
+    in property<[string]> artists;
 
     callback loadMangaData();
     callback loadChapters();
@@ -505,32 +502,46 @@ export component DextopReaderWindow inherits Window {
                     x: parent.width / 2 - (self.width / 2);
                     width: 196px;
                     height: 278px;
-                    background: yellow;
+                    background: black;
+
+                    Image {
+                        x: parent.width / 2 - (self.width / 2);
+                        width:196px;
+                        height: 278px;
+                        source: root.coverArt;
+                    }
                 }
 
                 // Author
                 HorizontalBox {
-                    height: 32px;
+                    height: 24px * authors.length;
                     alignment: LayoutAlignment.stretch;
                     Text {
-                        text: "Author:";
+                        vertical-alignment: top;
+                        text: "Author";
                     }
-                    Text {
-                        horizontal-alignment: right;
-                        text: "Makishima Suzuki";
+                    VerticalLayout {
+                        for data in root.authors:
+                            Text {
+                                horizontal-alignment: right;
+                                text: data;
+                            }
                     }
                 }
 
                 // Artist
                 HorizontalBox {
-                    height: 32px;
+                    height: 24px * artists.length;
                     alignment: LayoutAlignment.stretch;
                     Text {
-                        text: "Artist:";
+                        text: "Artist";
                     }
-                    Text {
-                        horizontal-alignment: right;
-                        text: "Aono Shimo";
+                    VerticalLayout {
+                        for data in root.artists:
+                            Text {
+                                horizontal-alignment: right;
+                                text: data;
+                            }
                     }
                 }
             }
@@ -540,26 +551,37 @@ export component DextopReaderWindow inherits Window {
     Rectangle {
         x: 256px;
         width: parent.width - 256px;
+
+        // BG text
+        Text {
+            text: root.chapterListBGText;
+        }
         
         
         ListView {
             y: 4px;
             width: parent.width - 16px;
             height: parent.height - 52px;
-            // for data in [{chapter: "61", title: "It's Japan's Summer, Elf-San!", id: "abcd"}, {chapter: "60", title: "An Encounter with the Hero Candidate Part 5", id: "efgh"}] : Rectangle {
+            // for data in [{id: "abcd", title: "It's Japan's Summer, Elf-San!", groupName: "No Group Scanlation"}, {id: "efgh", title: "An Encounter with the Hero Candidate Part 5", groupName: "Some Group Scanlation"}] : Rectangle {
             for data in chapterSet : Rectangle {
-                height: 72px;
+                height: 64px;
                 Rectangle {
-                    height: 64px;
+                    height: 56px;
                     background: #222222;
                     border-radius: 5px;
 
                     Text {
                         x: 8px;
-                        y: 4px;
+                        y: 8px;
                         width: parent.width - 80px;
-                        text: "Chapter " + data.chapter + " - " + data.title;
+                        text: data.title;
                         overflow: TextOverflow.elide;
+                    }
+
+                    Text {
+                        x: 8px;
+                        y: parent.height - self.height - 8px;
+                        text: "⤴️ " + data.groupName;
                     }
 
                     Button {

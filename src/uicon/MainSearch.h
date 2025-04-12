@@ -49,12 +49,14 @@ class DTMainSearchController
         
             //pass data to the UI
             std::vector<SearchResult> uiResults;
-            std::vector<std::string> coverPaths;
+            std::vector<std::string> coverURLs;
+            std::vector<std::string> coverNames;
             for (int i = 0; i < resultCount; i++)
             {
                 nlohmann::json resultInfo = searchResults["data"][i];
                 
                 SearchResult makeResult;
+                makeResult.json = resultInfo.dump();
                 makeResult.title = resultInfo["attributes"]["title"].begin().value();
                 if (resultInfo["attributes"]["description"].size() > 0)
                 {
@@ -64,25 +66,26 @@ class DTMainSearchController
                 {
                     makeResult.description = "(no description available)";
                 }
-                makeResult.id = resultInfo["id"].get<std::string>();
+                makeResult.cover = slint::Image::load_from_path("assets/images/placeholders/cover-low.png");
+
                 for (int j = 0; j < resultInfo["relationships"].size(); j++)
                 {
-                    if (resultInfo["relationships"][j]["type"].get<std::string>() == "cover_art")
+                    std::string relType = resultInfo["relationships"][j]["type"].get<std::string>();
+                    if (relType == "cover_art")
                     {
-                        makeResult.coverFile = resultInfo["relationships"][j]["attributes"]["fileName"].begin().value();
-                        coverPaths.push_back(std::string("https://uploads.mangadex.org/covers/") + std::string(makeResult.id) + "/" + resultInfo["relationships"][j]["attributes"]["fileName"].get<std::string>() + Dextop_Cover256Suffix);
-                        coverPaths.push_back(resultInfo["relationships"][j]["attributes"]["fileName"].get<std::string>() + Dextop_Cover256Suffix);
+                        coverURLs.push_back(std::string("https://uploads.mangadex.org/covers/") + resultInfo["id"].get<std::string>() + "/" + resultInfo["relationships"][j]["attributes"]["fileName"].get<std::string>() + Dextop_Cover256Suffix);
+                        coverNames.push_back(resultInfo["relationships"][j]["attributes"]["fileName"].get<std::string>() + Dextop_Cover256Suffix);
                     }
                 }
                 uiResults.push_back(makeResult);
             }
 
-            //send for the images
-            for (int i = 0; i < coverPaths.size(); i += 2)
+            //send for the cover images
+            for (int i = 0; i < coverURLs.size(); i++)
             {
                 dtThreadPool.detach_task([=]
                 {
-                    dextop->assetManager.GetMangaCover(coverPaths[i], coverPaths[i + 1]);
+                    dextop->assetManager.GetMangaCover(coverURLs[i], coverNames[i]);
                 });
             }
 
@@ -100,17 +103,11 @@ class DTMainSearchController
                 }
                 dextop->ui->set_pageCount(pageCount);
         
+                //queue up cover-application
                 std::vector<std::string> updatePaths;
-                for (int i = 0; i < resultCount; i++)
+                for (int i = 0; i < coverNames.size(); i++)
                 {
-                    SearchResult newResult;
-                    newResult.id = dextop->ui->get_results()->row_data(i)->id;
-                    newResult.title = dextop->ui->get_results()->row_data(i)->title;
-                    newResult.description = dextop->ui->get_results()->row_data(i)->description;
-                    newResult.coverFile = dextop->ui->get_results()->row_data(i)->coverFile;
-                    newResult.cover = slint::Image::load_from_path("assets/images/placeholders/cover-low.png");
-                    dextop->ui->get_results()->set_row_data(i, newResult);
-                    updatePaths.push_back(std::string("images/covers/") + std::string(uiResults[i].coverFile + Dextop_Cover256Suffix));
+                    updatePaths.push_back(std::string("images/covers/") + coverNames[i]);
                 }
                 dtThreadPool.detach_task([=]
                 {
@@ -119,20 +116,23 @@ class DTMainSearchController
             });
         }
 
-        static void UpdateResultImages(std::string searchID, std::vector<std::string> imagePaths)
+        static void UpdateResultImages(std::string curSearchID, std::vector<std::string> imagePaths)
         {
             Dextop* dextop = Dextop::GetInstance();
             for (int i = 0; i < imagePaths.size(); i++)
             {
                 slint::Image loadImage = dextop->assetManager.ImageLoadWR(imagePaths[i]);
                 slint::invoke_from_event_loop([=](){
-                    SearchResult newResult;
-                    newResult.id = dextop->ui->get_results()->row_data(i)->id;
-                    newResult.title = dextop->ui->get_results()->row_data(i)->title;
-                    newResult.description = dextop->ui->get_results()->row_data(i)->description;
-                    newResult.coverFile = dextop->ui->get_results()->row_data(i)->coverFile;
-                    newResult.cover = loadImage;
-                    dextop->ui->get_results()->set_row_data(i, newResult);
+                    if (curSearchID == searchID)
+                    {
+                        auto oldResult = dextop->ui->get_results()->row_data(i);
+                        SearchResult newResult;
+                        newResult.json = oldResult->json;
+                        newResult.title = oldResult->title;
+                        newResult.description = oldResult->description;
+                        newResult.cover = loadImage;
+                        dextop->ui->get_results()->set_row_data(i, newResult);
+                    }
                 });
             }
         }
