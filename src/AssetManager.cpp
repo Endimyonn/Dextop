@@ -105,9 +105,10 @@ void AssetManager::GetImage(std::string url, std::string path)
     curl_easy_cleanup(curl);
 }
 
-void AssetManager::GetChapterPage(std::string url, std::string fileName)
+void AssetManager::GetChapterPage(std::string url, std::string chapterID, std::string fileName)
 {
-    GetImage(url, std::string("images/pages/") + fileName);
+    std::filesystem::create_directory(std::string("assets/images/pages/") + chapterID); //make sure the chapter's directory exists
+    GetImage(url, std::string("images/pages/") + chapterID + "/" + fileName);
 }
 
 void AssetManager::GetMangaCover(std::string url, std::string fileName)

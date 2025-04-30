@@ -466,6 +466,7 @@ export component DextopPrimaryWindow inherits Window {
 
 export struct ReaderCVChapter {
     id: string,
+    fetchOffset: int,
     title: string,
     groupName: string
 }
@@ -488,15 +489,18 @@ export component DextopReaderWindow inherits Window {
     in property<int> chapterListPageCount: 1;
     in-out property<int> chapterListPage: 1;
     callback loadMangaData();
-    callback loadChapters(int);
-    callback loadChapter(string, int);
+    callback populateChapters(int);
+    callback loadChapter(string, int, int);
 
     // reader view properties
-    in property<bool> readerActive: true;
+    in property<bool> readerActive: false;
     in property<int> readerChapterPageIndex: 0;
     in property<int> readerChapterPageCount: 0;
+    in property<bool> readerCanGoPrev: true;
+    in property<bool> readerCanGoNext: true;
     in property<image> readerImage;
     callback readerChangePage(int);
+    callback readerClose();
 
     // Chapter view: manga info
     Rectangle {
@@ -597,7 +601,7 @@ export component DextopReaderWindow inherits Window {
                         height: 32px;
                         text: "Read";
                         clicked => {
-
+                            root.loadChapter(data.id, data.fetchOffset, 0);
                         }
                     }
                 }
@@ -615,7 +619,7 @@ export component DextopReaderWindow inherits Window {
                 enabled: !root.chapterListLoading && root.chapterListPage > 1;
                 clicked => {
                     root.chapterListPage = root.chapterListPage - 1;
-                    root.loadChapters(root.chapterListPage);
+                    root.populateChapters(root.chapterListPage);
                 }
             }
             Rectangle {
@@ -636,7 +640,7 @@ export component DextopReaderWindow inherits Window {
                 enabled: !root.chapterListLoading && root.chapterListPage < root.chapterListPageCount;
                 clicked => {
                     root.chapterListPage = root.chapterListPage + 1;
-                    root.loadChapters(root.chapterListPage);
+                    root.populateChapters(root.chapterListPage);
                 }
             }
         }
@@ -667,21 +671,43 @@ export component DextopReaderWindow inherits Window {
         }
 
         //click zones
-        TouchArea {
+        TouchArea { //prev
             x: 0px;
             width: parent.width / 2;
             mouse-cursor: MouseCursor.pointer;
             clicked => {
-                root.readerChangePage(root.readerChapterPageIndex + 1)
+                root.readerChangePage(root.readerChapterPageIndex - 1);
             }
+            enabled: root.readerCanGoPrev;
         }
-        TouchArea {
+        TouchArea { //next
             x: parent.width / 2;
             width: parent.width / 2;
-            mouse-cursor: MouseCursor.pointer;
+            mouse-cursor: root.readerCanGoNext ? MouseCursor.pointer : MouseCursor.default;
             clicked => {
-                root.readerChangePage(root.readerChapterPageIndex - 1)
+                root.readerChangePage(root.readerChapterPageIndex + 1)
             }
+            enabled: root.readerCanGoNext;
+        }
+
+        //close reader button
+        Button {
+            x: parent.width - 72px;
+            y: 8px;
+            width: 64px;
+            text: "Close";
+            clicked => {
+                root.readerClose();
+            }
+        }
+
+        //temp page number
+        Text {
+            x: parent.width - 136px;
+            y: 84px;
+            width: 128px;
+            text: "Page " + (root.readerChapterPageIndex + 1) + "/" + root.readerChapterPageCount;
+            horizontal-alignment: TextHorizontalAlignment.right;
         }
     }
 }

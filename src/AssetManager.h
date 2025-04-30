@@ -14,7 +14,7 @@ class AssetManager
         ~AssetManager();
 
         void GetImage(std::string url, std::string path);
-        void GetChapterPage(std::string url, std::string fileName);
+        void GetChapterPage(std::string url, std::string chapterID, std::string fileName);
         void GetMangaCover(std::string url, std::string fileName);
 
         slint::Image ImageLoadWR(std::string path);
