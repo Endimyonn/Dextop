@@ -1,4 +1,4 @@
-import { Button, VerticalBox, Spinner, LineEdit, ListView, TabWidget, StandardTableView, ScrollView, HorizontalBox, ProgressIndicator } from "std-widgets.slint";
+import { Button, VerticalBox, Spinner, LineEdit, ListView, TabWidget, StandardTableView, ScrollView, HorizontalBox, ProgressIndicator, Palette, StyleMetrics } from "std-widgets.slint";
 
 
 
@@ -464,52 +464,56 @@ export component DextopPrimaryWindow inherits Window {
 
 
 
-export struct ReaderMVChapter {
+export struct ReaderCVChapter {
     id: string,
     title: string,
     groupName: string
 }
 
 export component DextopReaderWindow inherits Window {
-    in property<string> readerTitle: "Reader";
-    title: readerTitle;
+    in property<string> windowTitle: "Reader";
+    title: windowTitle;
     min-width: 640px;
     min-height: 480px;
     max-width: 9999px;
     max-height: 9999px;
 
-    in property<[ReaderMVChapter]> chapterSet: [];
+    // chapter view properties
+    in property<[ReaderCVChapter]> chapterSet: [];
     in property<string> chapterListBGText: "Loading...";
     in property<image> coverArt;
     in property<[string]> authors;
     in property<[string]> artists;
-
+    in property<bool> chapterListLoading: false;
+    in property<int> chapterListPageCount: 1;
+    in-out property<int> chapterListPage: 1;
     callback loadMangaData();
-    callback loadChapters();
+    callback loadChapters(int);
+    callback loadChapter(string, int);
 
+    // reader view properties
+    in property<bool> readerActive: true;
+    in property<int> readerChapterPageIndex: 0;
+    in property<int> readerChapterPageCount: 0;
+    in property<image> readerImage;
+    callback readerChangePage(int);
+
+    // Chapter view: manga info
     Rectangle {
         x: 0px;
         width: 256px;
         height: parent.height;
-        background: gray;
 
         ScrollView {
             width: parent.width - 16px;
             height: parent.height - 16px;
 
             VerticalLayout {
-                Rectangle {
+                Image {
                     x: parent.width / 2 - (self.width / 2);
                     width: 196px;
-                    height: 278px;
-                    background: black;
-
-                    Image {
-                        x: parent.width / 2 - (self.width / 2);
-                        width:196px;
-                        height: 278px;
-                        source: root.coverArt;
-                    }
+                    height: (self.source.height * (196 / self.source.width)) * 1px;
+                    source: root.coverArt;
                 }
 
                 // Author
@@ -548,6 +552,7 @@ export component DextopReaderWindow inherits Window {
         }
     }
 
+    // Chapter view: chapter list
     Rectangle {
         x: 256px;
         width: parent.width - 256px;
@@ -562,7 +567,10 @@ export component DextopReaderWindow inherits Window {
             y: 4px;
             width: parent.width - 16px;
             height: parent.height - 52px;
-            // for data in [{id: "abcd", title: "It's Japan's Summer, Elf-San!", groupName: "No Group Scanlation"}, {id: "efgh", title: "An Encounter with the Hero Candidate Part 5", groupName: "Some Group Scanlation"}] : Rectangle {
+            changed viewport-height => {
+                self.viewport-y = 0px;
+            }
+
             for data in chapterSet : Rectangle {
                 height: 64px;
                 Rectangle {
@@ -588,6 +596,9 @@ export component DextopReaderWindow inherits Window {
                         x: parent.width - 40px - (self.width / 2);
                         height: 32px;
                         text: "Read";
+                        clicked => {
+
+                        }
                     }
                 }
             }
@@ -601,12 +612,17 @@ export component DextopReaderWindow inherits Window {
             Button {
                 text: "<";
                 width: self.height;
+                enabled: !root.chapterListLoading && root.chapterListPage > 1;
+                clicked => {
+                    root.chapterListPage = root.chapterListPage - 1;
+                    root.loadChapters(root.chapterListPage);
+                }
             }
             Rectangle {
                 width: 16px;
             }
             Text {
-                text: "h";
+                text: root.chapterListPage;
                 font-size: 16px;
                 horizontal-alignment: center;
                 vertical-alignment: center;
@@ -617,6 +633,54 @@ export component DextopReaderWindow inherits Window {
             Button {
                 text: ">";
                 width: self.height;
+                enabled: !root.chapterListLoading && root.chapterListPage < root.chapterListPageCount;
+                clicked => {
+                    root.chapterListPage = root.chapterListPage + 1;
+                    root.loadChapters(root.chapterListPage);
+                }
+            }
+        }
+    }
+
+    // Reader view
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: parent.height;
+        background: Palette.background;
+        visible: root.readerActive;
+
+        // the current image waow
+        HorizontalLayout {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: parent.height;
+            alignment: LayoutAlignment.center;
+
+            Image {
+                source: root.readerImage;
+                image-fit: ImageFit.contain;
+                //x: (parent.width / 2) - ((self.source.width / 2) * 1px);
+            }
+        }
+
+        //click zones
+        TouchArea {
+            x: 0px;
+            width: parent.width / 2;
+            mouse-cursor: MouseCursor.pointer;
+            clicked => {
+                root.readerChangePage(root.readerChapterPageIndex + 1)
+            }
+        }
+        TouchArea {
+            x: parent.width / 2;
+            width: parent.width / 2;
+            mouse-cursor: MouseCursor.pointer;
+            clicked => {
+                root.readerChangePage(root.readerChapterPageIndex - 1)
             }
         }
     }
