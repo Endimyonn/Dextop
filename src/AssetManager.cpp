@@ -116,6 +116,7 @@ void AssetManager::GetMangaCover(std::string url, std::string fileName)
     GetImage(url, std::string("images/covers/") + fileName);
 }
 
+//Image Load When Ready: wait for an image to be saved locally before loading it
 slint::Image AssetManager::ImageLoadWR(std::string path)
 {
     while (!std::filesystem::exists((assetsRoot + path).c_str()))
@@ -131,5 +132,12 @@ slint::Image AssetManager::ImageLoadWR(std::string path)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     slint::Image loadImage = slint::Image::load_from_path((assetsRoot + path).c_str());
+
+    //check if the file loaded correctly, and retry after a bit if it didn't
+    if (loadImage.size().width == 0)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        return slint::Image::load_from_path((assetsRoot + path).c_str());
+    }
     return loadImage;
 }

@@ -1,5 +1,6 @@
 #include "Dextop.h"
 #include "Dextop_Defs.h"
+#include "uicon/MainUpdates.h"
 #include "uicon/MainSearch.h"
 #include "uicon/Reader.h"
 #include <windows.h>
@@ -131,14 +132,22 @@ void Dextop::Run()
 
     std::vector<DTReaderController*> readerWindows;
 
-    ui->on_openManga([&readerWindows](slint::SharedString json) {
-        DTReaderController* readerController = new DTReaderController(nlohmann::json::parse(json.data()));
+    ui->on_openManga([&readerWindows](slint::SharedString mangaJson) {
+        DTReaderController* readerController = new DTReaderController(nlohmann::json::parse(mangaJson.data()));
+        readerWindows.push_back(readerController);
+    });
+
+    ui->on_openChapter([&readerWindows](slint::SharedString chapterID, slint::SharedString mangaID)
+    {
+        DTReaderController* readerController = new DTReaderController(chapterID.data(), mangaID.data());
         readerWindows.push_back(readerController);
     });
 
     ui->on_getUpdates([&](){
-        dtlog << "updates feature not done yet" << endl;
-        dtlog << "! " << readerWindows[0]->json.dump() << std::endl;
+        dtThreadPool.detach_task([]()
+        {
+            DTMainUpdatesController::DoRefreshUpdates();
+        });
     });
     
     ui->on_doSearch([&]{

@@ -12,3 +12,6 @@ This project is not ready for normal use and things will break/not work. To buil
 2. If using Windows, install curl through vcpkg. Otherwise, ensure libcurl is present on your system.
 2. In the root directory, run `cmake ./ "-B./build" -T host=x64 -A x64` to configure the project
 3. Run `cmake --build "./build" --config Release --target ALL_BUILD -j 26` to build it
+
+## Other
+Dextop does not yet send the mandatory telmetry response for MD@Home asset retrieval. I cannot recommend using it until it meets that requirement.

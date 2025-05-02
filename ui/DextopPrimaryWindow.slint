@@ -2,6 +2,22 @@ import { Button, VerticalBox, Spinner, LineEdit, ListView, TabWidget, StandardTa
 
 
 
+export struct UpdatesItem {
+    id: string,
+    title: string,
+    groupName: string,
+    age: string,
+    uploader: string,
+    pageCount: int
+}
+
+export struct UpdatesGroup {
+    id: string,
+    title: string,
+    chapterCount: int,
+    chapters: [UpdatesItem]
+}
+
 export struct SearchResult {
     json: string,
     title: string,
@@ -16,10 +32,19 @@ export component DextopPrimaryWindow inherits Window {
     max-width: 9999px;
     max-height: 9999px;
 
-    out property<int> tab: 2;
+    out property<int> tab: 1;
 
+    //general
+    callback openManga(string);
+    callback openChapter(string, string);
+
+    //update properties
+    in property<string> updatesBGText: "";
+    in property<bool> updatesRefreshButtonEnabled: true;
+    in property<[UpdatesGroup]> updatesGroups;
     callback getUpdates();
 
+    //search properties
     in-out property<string> searchTarget: "";
     in-out property<bool> searchLoading: false;
     in-out property<string> currentSearch: "";
@@ -30,8 +55,7 @@ export component DextopPrimaryWindow inherits Window {
     callback changeSearchPage(int);
     callback searchListingChapters(string);
 
-    callback openManga(string);
-
+    //settings properties
     in property<string> platform: "windows";
     in property<bool> consoleOpen: false;
     in-out property<string> authUsername;
@@ -96,6 +120,7 @@ export component DextopPrimaryWindow inherits Window {
             }
         }
 
+        // Content
         TabWidget {
             y: -32px;
             height: parent.height + 32px;
@@ -110,7 +135,19 @@ export component DextopPrimaryWindow inherits Window {
 
             // Updates
             Tab {
-                VerticalBox {
+                // Placeholder text
+                Text {
+                    y: ((parent.height - 32px) / 2) + 32px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    text: root.updatesBGText;
+                }
+
+                VerticalLayout {
+                    x: 8px;
+                    y: 8px;
+                    width: parent.width - 16px;
+                    height: parent.height - 16px;
                     HorizontalLayout {
                         height: 32px;
                         alignment: LayoutAlignment.space-between;
@@ -123,8 +160,98 @@ export component DextopPrimaryWindow inherits Window {
     
                         Button {
                             text: "Refresh";
+                            enabled: root.updatesRefreshButtonEnabled;
                             clicked => {
                                 root.getUpdates();
+                            }
+                        }
+                    }
+
+                    ListView {
+                        // for data in [{title: "a", chapterCount: 1, chapters: [{title: "arg!", groupName: "group!", age: "55 minutes", uploader: "idk who", pageCount: 64}]}, {title: "Kage no Jitsuryokusha ni Naritakute!", chapterCount: 2, chapters: [{title: "Ch. 72.2", groupName: "gef", age: "55 years", uploader: "someone", pageCount: 641}, {title: "Ch. 72.1", groupName: "gef", age: "55 years", uploader: "someone", pageCount: 12}]}]: Rectangle {
+                        for data in root.updatesGroups: Rectangle {
+                            height: 28px + (data.chapterCount * 54px) + 5px;
+                            Rectangle {
+                                y: 0px;
+                                background: Palette.control-background;
+                                border-radius: 5px;
+                                height: 28px + (data.chapterCount * 54px) + 0px;
+                                Text {
+                                    x: 10px;
+                                    y: 5px;
+                                    width: parent.width - 20px;
+                                    text: data.title;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                                Rectangle {
+                                    x: 5px;
+                                    y: 28px;
+                                    background: Palette.control-foreground;
+                                    width: parent.width - 10px;
+                                    height: 1px;
+                                }
+
+                                VerticalLayout {
+                                    y: 28px;
+                                    height: parent.height - 28px;
+                                    for chapterData in data.chapters: Rectangle {
+                                        width: parent.width;
+                                        height: 54px;
+                                        Rectangle {
+                                            height: 44px;
+                                            // background: black;
+                                            Rectangle { // Unread marker
+                                                x: parent.x + 5px;
+                                                width: 3px;
+                                                height: parent.height;
+                                                background: Palette.accent-background;
+                                                border-top-left-radius: 5px;
+                                                border-bottom-left-radius: 5px;
+                                            }
+                                            Text { // Title
+                                                x: 15px;
+                                                y: 5px;
+                                                width: ageText.x - 10px;
+                                                text: chapterData.title;
+                                                vertical-alignment: center;
+                                                overflow: elide;
+                                            }
+                                            Text { // Group
+                                                x: 15px;
+                                                y: parent.height - self.height - 5px;
+                                                width: ageText.x - 10px;
+                                                text: "🧑‍🤝‍🧑 " + chapterData.groupName + "    ⤴️ " + chapterData.uploader;
+                                                overflow: elide;
+                                            }
+
+                                            ageText := Text { // Age
+                                                x: parent.width - 10px - self.width - readButton.width;
+                                                y: 5px;
+                                                width: 80px;
+                                                text: "🕓 " + chapterData.age;
+                                                horizontal-alignment: TextHorizontalAlignment.right;
+                                                vertical-alignment: center;
+                                                overflow: elide;
+                                            }
+
+                                            Text { // Pages
+                                                x: parent.width - 10px - self.width - readButton.width;
+                                                y: parent.height - self.height - 5px;
+                                                width: 80px;
+                                                text: "📄 " + chapterData.pageCount + " pages";
+                                            }
+
+                                            readButton := Button {
+                                                x: parent.width - self.width - 5px;
+                                                text: "Read";
+                                                clicked => {
+                                                    root.openChapter(chapterData.id, data.id)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -173,7 +300,7 @@ export component DextopPrimaryWindow inherits Window {
                                 Rectangle {
                                     width: parent.width;
                                     height: 104px;
-                                    background: #222222;
+                                    background: Palette.control-background;
                                     clip: true;
     
                                     //icon
@@ -466,9 +593,9 @@ export component DextopPrimaryWindow inherits Window {
 
 export struct ReaderCVChapter {
     id: string,
-    fetchOffset: int,
     title: string,
-    groupName: string
+    groupName: string,
+    pageCount: int
 }
 
 export component DextopReaderWindow inherits Window {
@@ -483,6 +610,7 @@ export component DextopReaderWindow inherits Window {
     in property<[ReaderCVChapter]> chapterSet: [];
     in property<string> chapterListBGText: "Loading...";
     in property<image> coverArt;
+    in property<string> rating: "0.00";
     in property<[string]> authors;
     in property<[string]> artists;
     in property<bool> chapterListLoading: false;
@@ -490,7 +618,7 @@ export component DextopReaderWindow inherits Window {
     in-out property<int> chapterListPage: 1;
     callback loadMangaData();
     callback populateChapters(int);
-    callback loadChapter(string, int, int);
+    callback loadChapter(string, int);
 
     // reader view properties
     in property<bool> readerActive: false;
@@ -518,6 +646,19 @@ export component DextopReaderWindow inherits Window {
                     width: 196px;
                     height: (self.source.height * (196 / self.source.width)) * 1px;
                     source: root.coverArt;
+                }
+
+                // Rating
+                HorizontalBox {
+                    height: 24px;
+                    alignment: LayoutAlignment.stretch;
+                    Text {
+                        text: "Rating";
+                    }
+                    Text {
+                        horizontal-alignment: right;
+                        text: "⭐ " + root.rating;
+                    }
                 }
 
                 // Author
@@ -574,11 +715,14 @@ export component DextopReaderWindow inherits Window {
             changed viewport-height => {
                 self.viewport-y = 0px;
             }
+            enabled: !root.readerActive;
 
+            // for data in [{id: "?", fetchOffset: 0, title: "abc", groupName: "grouP", pageCount: 16}]: Rectangle {
             for data in chapterSet : Rectangle {
                 height: 64px;
                 Rectangle {
                     height: 56px;
+                    max-width: 1024px;
                     background: #222222;
                     border-radius: 5px;
 
@@ -590,10 +734,20 @@ export component DextopReaderWindow inherits Window {
                         overflow: TextOverflow.elide;
                     }
 
-                    Text {
+                    HorizontalLayout {
                         x: 8px;
                         y: parent.height - self.height - 8px;
-                        text: "⤴️ " + data.groupName;
+                        width: parent.width - 128px;
+                        height: 18px;
+                        alignment: LayoutAlignment.start;
+                        
+                        Text {
+                            text: "⤴️ " + data.groupName;
+                        }
+
+                        Text {
+                            text: " ⸱ " + data.pageCount + " pages";
+                        }
                     }
 
                     Button {
@@ -601,7 +755,7 @@ export component DextopReaderWindow inherits Window {
                         height: 32px;
                         text: "Read";
                         clicked => {
-                            root.loadChapter(data.id, data.fetchOffset, 0);
+                            root.loadChapter(data.id, 0);
                         }
                     }
                 }

@@ -6,8 +6,6 @@
 #include <iostream>
 #include <curl/curl.h>
 
-using namespace std;
-using json = nlohmann::json;
 
 
 
@@ -55,6 +53,12 @@ void Dexxor::Shutdown()
 	
 }
 
+
+
+//-----------------------------------------------------------//
+//                    Authentication                         //
+//-----------------------------------------------------------//
+
 bool Dexxor::Authenticated()
 {
 	return authenticated;
@@ -65,7 +69,7 @@ void Dexxor::Authenticate(std::string argUsername, std::string argPassword, std:
 	//are we already authenticated?
 	if (authenticated == true)
 	{
-		cout << "Already authenticated!" << endl;
+		dtlog << "Already authenticated!" << std::endl;
 		return;
 	}
 	
@@ -92,11 +96,11 @@ void Dexxor::Authenticate(std::string argUsername, std::string argPassword, std:
 	result = curl_easy_perform(curl);
 	if (result != CURLE_OK)
 	{
-		cout << "Authentication request failed: " << curl_easy_strerror(result) << endl;
+		dtlog << "Authentication request failed: " << curl_easy_strerror(result) << std::endl;
 		return;
 	}
 
-	json responseJson = json::parse(readBuffer);
+	nlohmann::json responseJson = nlohmann::json::parse(readBuffer);
 
 	if (responseJson.contains("access_token"))
 	{
@@ -111,12 +115,12 @@ void Dexxor::Authenticate(std::string argUsername, std::string argPassword, std:
 		Dextop::GetInstance()->settings["authLastSuccessTime"] = tokenTime;
 		Dextop::GetInstance()->settings["authLastSuccessCID"] = tokenCID;
 		Dextop::GetInstance()->settings["authLastSuccessCSecret"] = tokenCSecret;
-		cout << "Authentication succeeded." << endl;
+		dtlog << "Authentication succeeded." << std::endl;
 	}
 	else
 	{
 		authenticated = false;
-		cout << "Authentication failed. Reason: " << responseJson["error"] << endl << responseJson << endl;
+		dtlog << "Authentication failed. Reason: " << responseJson["error"] << std::endl << responseJson << std::endl;
 	}
 }
 
@@ -152,11 +156,11 @@ void Dexxor::RefreshAccessToken()
 	result = curl_easy_perform(curl);
 	if (result != CURLE_OK)
 	{
-		cout << "Reauthentication request failed: " << curl_easy_strerror(result) << endl;
+		dtlog << "Reauthentication request failed: " << curl_easy_strerror(result) << std::endl;
 		return;
 	}
 
-	json responseJson = json::parse(readBuffer);
+	nlohmann::json responseJson = nlohmann::json::parse(readBuffer);
 
 	if (responseJson.contains("access_token"))
 	{
@@ -165,12 +169,12 @@ void Dexxor::RefreshAccessToken()
 		time(&tokenTime);
 		Dextop::GetInstance()->settings["authLastAccessToken"] = accessToken;
 		Dextop::GetInstance()->settings["authLastSuccessTime"] = tokenTime;
-		cout << "Reauthentication succeeded." << endl;
+		dtlog << "Reauthentication succeeded." << std::endl;
 	}
 	else
 	{
 		authenticated = false;
-		cout << "Reauthentication failed. Reason: " << responseJson["error"] << endl << responseJson << endl;
+		dtlog << "Reauthentication failed. Reason: " << responseJson["error"] << std::endl << responseJson << std::endl;
 	}
 }
 
@@ -190,6 +194,12 @@ bool Dexxor::AccessTokenExpired()
 	return true;
 }
 
+
+
+//-----------------------------------------------------------//
+//                        General                            //
+//-----------------------------------------------------------//
+
 nlohmann::json Dexxor::Search(std::string argTitle, unsigned short limit, unsigned short page)
 {
 	//prepare
@@ -206,25 +216,59 @@ nlohmann::json Dexxor::Search(std::string argTitle, unsigned short limit, unsign
 									+ "?title=" + argTitle
 									+ "&limit=" + std::to_string(limit)
 									+ "&offset=" + std::to_string(page * limit)
-									+ "&includes%5B%5D=author"
-									+ "&includes%5B%5D=artist"
-									+ "&includes%5B%5D=cover_art";
+									+ "&includes[]=author"
+									+ "&includes[]=artist"
+									+ "&includes[]=cover_art";
 	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 
 	result = curl_easy_perform(curl);
 	if (result != CURLE_OK)
 	{
-		cout << "Search request failed: " << curl_easy_strerror(result) << endl;
+		dtlog << "Search request failed: " << curl_easy_strerror(result) << std::endl;
 	}
 
-	json responseJson = json::parse(readBuffer);
+	nlohmann::json responseJson = nlohmann::json::parse(readBuffer);
 
 	if (responseJson.contains("error"))
 	{
-		cout << "Search request failed. Reason: " << responseJson["error"] << endl;
+		dtlog << "Search request failed. Reason: " << responseJson["error"] << std::endl;
 	}
 
 	return responseJson;
+}
+
+nlohmann::json Dexxor::GetManga(std::string mangaID)
+{
+	//prepare
+	CURL* curl = curl_easy_init();
+	CURLcode result;
+	std::string readBuffer = "";
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, Dextop_UserAgent);
+	curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 100);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+
+	//set url
+	std::string url = std::string("https://api.mangadex.org/manga/") + mangaID
+									+ "?includes[]=author"
+									+ "&includes[]=artist"
+									+ "&includes[]=cover_art";
+	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+
+	result = curl_easy_perform(curl);
+	if (result != CURLE_OK)
+	{
+		dtlog << "Manga request failed (ID: " << mangaID << "): " << curl_easy_strerror(result) << std::endl;
+	}
+
+	nlohmann::json responseJson = nlohmann::json::parse(readBuffer);
+
+	if (responseJson.contains("error"))
+	{
+		dtlog << "Manga request failed. Reason: " << responseJson["error"] << std::endl;
+	}
+
+	return responseJson["data"];
 }
 
 nlohmann::json Dexxor::GetChapters(std::string mangaID, std::string limit, std::string offset)
@@ -243,27 +287,98 @@ nlohmann::json Dexxor::GetChapters(std::string mangaID, std::string limit, std::
 									+ "limit=" + limit
 									+ "&offset=" + offset
 									+ "&manga=" + mangaID
-									+ "&translatedLanguage%5B%5D=" + "en"
-									+ "&contentRating%5B%5D=" + "safe"
-									+ "&contentRating%5B%5D=" + "suggestive"
-									+ "&contentRating%5B%5D=" + "erotica"
-									+ "&contentRating%5B%5D=" + "pornographic"
+									+ "&translatedLanguage[]=" + "en"
+									+ "&contentRating[]=" + "safe"
+									+ "&contentRating[]=" + "suggestive"
+									+ "&contentRating[]=" + "erotica"
+									+ "&contentRating[]=" + "pornographic"
 									+ "&includeFutureUpdates=" + "0"
-									+ "&order%5BcreatedAt%5D=asc&order%5BupdatedAt%5D=asc&order%5BpublishAt%5D=asc&order%5BreadableAt%5D=asc&order%5Bvolume%5D=asc&order%5Bchapter%5D=asc"
-									+ "&includes[]=scanlation_group";
+									+ "&order[createdAt]=asc&order[updatedAt]=asc&order[publishAt]=asc&order[readableAt]=asc&order[volume]=asc&order[chapter]=asc"
+									+ "&includes[]=manga"
+									+ "&includes[]=scanlation_group"
+									+ "&includes[]=user";
 	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 
 	result = curl_easy_perform(curl);
 	if (result != CURLE_OK)
 	{
-		cout << "Search request failed: " << curl_easy_strerror(result) << endl;
+		dtlog << "Chapters request failed: " << curl_easy_strerror(result) << std::endl;
 	}
 
-	json responseJson = json::parse(readBuffer);
+	nlohmann::json responseJson = nlohmann::json::parse(readBuffer);
 
 	if (responseJson.contains("error"))
 	{
-		cout << "Search request failed. Reason: " << responseJson["error"] << endl;
+		dtlog << "Chapters request failed. Reason: " << responseJson["error"] << std::endl;
+	}
+
+	return responseJson;
+}
+
+nlohmann::json Dexxor::GetChaptersAggregate(std::string mangaID)
+{
+	//prepare
+	CURL* curl = curl_easy_init();
+	CURLcode result;
+	std::string readBuffer = "";
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, Dextop_UserAgent);
+	curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 100);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+
+	//set url
+	std::string url = std::string("https://api.mangadex.org/manga/") + mangaID + "/aggregate"
+									+ "?translatedLanguage[]=" + "en";
+	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+
+	result = curl_easy_perform(curl);
+	if (result != CURLE_OK)
+	{
+		dtlog << "Chapters (aggregate) request failed: " << curl_easy_strerror(result) << std::endl;
+	}
+
+	nlohmann::json responseJson = nlohmann::json::parse(readBuffer);
+
+	return responseJson["volumes"];
+}
+
+nlohmann::json Dexxor::GetChapter(std::string chapterID)
+{
+	//prepare
+	CURL* curl = curl_easy_init();
+	CURLcode result;
+	std::string readBuffer = "";
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, Dextop_UserAgent);
+	curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 100);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+
+	//set url
+	std::string url = std::string("https://api.mangadex.org/chapter?") +
+									+ "limit=1"
+									+ "&ids[]=" + chapterID
+									+ "&translatedLanguage[]=" + "en"
+									+ "&contentRating[]=" + "safe"
+									+ "&contentRating[]=" + "suggestive"
+									+ "&contentRating[]=" + "erotica"
+									+ "&contentRating[]=" + "pornographic"
+									+ "&order[createdAt]=asc&order[updatedAt]=asc&order[publishAt]=asc&order[readableAt]=asc&order[volume]=asc&order[chapter]=asc"
+									+ "&includes[]=manga"
+									+ "&includes[]=scanlation_group"
+									+ "&includes[]=user";
+	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+
+	result = curl_easy_perform(curl);
+	if (result != CURLE_OK)
+	{
+		dtlog << "Chapter request failed: " << curl_easy_strerror(result) << std::endl;
+	}
+
+	nlohmann::json responseJson = nlohmann::json::parse(readBuffer);
+
+	if (responseJson.contains("error"))
+	{
+		dtlog << "Chapter request failed. Reason: " << responseJson["error"] << std::endl;
 	}
 
 	return responseJson;
@@ -279,28 +394,117 @@ nlohmann::json Dexxor::GetUpdates(unsigned short limit, unsigned short page)
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, Dextop_UserAgent);
 	curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 100);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+	struct curl_slist* headers = curl_slist_append(NULL, (std::string("Authorization: Bearer ") + accessToken).c_str());
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
 	//set url
 	std::string url = std::string("https://api.mangadex.org/user/follows/manga/feed")
 									+ "?limit=" + std::to_string(limit)
-									+ "&offset=" + std::to_string(page * limit);
+									+ "&offset=" + std::to_string(page * limit)
+									+ "&translatedLanguage[]=" + "en"
+									+ "&contentRating[]=" + "safe"
+									+ "&contentRating[]=" + "suggestive"
+									+ "&contentRating[]=" + "erotica"
+									+ "&contentRating[]=" + "pornographic"
+									+ "&includeFutureUpdates=" + "0"
+									+ "&order[createdAt]=desc&order[updatedAt]=desc&order[publishAt]=desc&order[readableAt]=desc&order[volume]=desc&order[chapter]=desc"
+									+ "&includes[]=manga"
+									+ "&includes[]=scanlation_group"
+									+ "&includes[]=user";
 	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 
 	result = curl_easy_perform(curl);
 	if (result != CURLE_OK)
 	{
-		cout << "Feed request failed: " << curl_easy_strerror(result) << endl;
+		dtlog << "Updates request failed: " << curl_easy_strerror(result) << std::endl;
 	}
 
-	json responseJson = json::parse(readBuffer);
+	nlohmann::json responseJson = nlohmann::json::parse(readBuffer);
 
 	if (responseJson.contains("error"))
 	{
-		cout << "Feed request failed. Reason: " << responseJson["error"] << endl;
+		dtlog << "Updates request failed. Reason: " << responseJson["error"] << std::endl;
 	}
 
 	return responseJson;
 }
+
+nlohmann::json Dexxor::GetMangaStatistics(std::string mangaID)
+{
+	//prepare
+	CURL* curl = curl_easy_init();
+	CURLcode result;
+	std::string readBuffer = "";
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, Dextop_UserAgent);
+	curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 100);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+
+	//set url
+	std::string url = std::string("https://api.mangadex.org/statistics/manga/") + mangaID;
+	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+
+	result = curl_easy_perform(curl);
+	if (result != CURLE_OK)
+	{
+		dtlog << "Manga statistics request (ID: " << mangaID << ") failed: " << curl_easy_strerror(result) << std::endl;
+	}
+
+	nlohmann::json responseJson = nlohmann::json::parse(readBuffer);
+
+	if (responseJson["result"].get<std::string>() == "error")
+	{
+		dtlog << "Manga statistics request failed. Response: " << std::endl << responseJson.dump(4) << std::endl;
+	}
+
+	return responseJson["statistics"][mangaID];
+}
+
+nlohmann::json Dexxor::GetMangaStatistics(std::vector<std::string> mangaIDs)
+{
+	if (mangaIDs.size() == 0)
+	{
+		dtlog << "Dexxor::GetMangaStatistics (multiple): ID set is empty!" << std::endl;
+		return nlohmann::json();
+	}
+
+	//prepare
+	CURL* curl = curl_easy_init();
+	CURLcode result;
+	std::string readBuffer = "";
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, Dextop_UserAgent);
+	curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 100);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+
+	//set url
+	std::string url = std::string("https://api.mangadex.org/statistics/manga?manga[]=") + mangaIDs[0];
+	for (int i = 1; i < mangaIDs.size(); i++)
+	{
+		url = url + "&manga[]=" + mangaIDs[i];
+	}
+
+	result = curl_easy_perform(curl);
+	if (result != CURLE_OK)
+	{
+		dtlog << "Manga statistics (multiple) request failed: " << curl_easy_strerror(result) << std::endl;
+	}
+
+	nlohmann::json responseJson = nlohmann::json::parse(readBuffer);
+
+	if (responseJson["result"].get<std::string>() == "error")
+	{
+		dtlog << "Manga statistics (multiple) request failed. Response: " << std::endl << responseJson.dump(4) << std::endl;
+	}
+
+	return responseJson["statistics"];
+}
+
+
+
+//-----------------------------------------------------------//
+//                        Assets                             //
+//-----------------------------------------------------------//
 
 nlohmann::json Dexxor::GetChapterImageMeta(std::string chapterID)
 {
@@ -319,14 +523,14 @@ nlohmann::json Dexxor::GetChapterImageMeta(std::string chapterID)
 	result = curl_easy_perform(curl);
 	if (result != CURLE_OK)
 	{
-		cout << "Search request failed: " << curl_easy_strerror(result) << endl;
+		dtlog << "Search request failed: " << curl_easy_strerror(result) << std::endl;
 	}
 
-	json responseJson = json::parse(readBuffer);
+	nlohmann::json responseJson = nlohmann::json::parse(readBuffer);
 
 	if (responseJson.contains("error"))
 	{
-		cout << "Search request failed. Reason: " << responseJson["error"] << endl;
+		dtlog << "Search request failed. Reason: " << responseJson["error"] << std::endl;
 	}
 
 	return responseJson;

@@ -20,8 +20,13 @@ public:
 	bool AccessTokenExpired();
 
 	nlohmann::json Search(std::string argTitle, unsigned short limit = 10, unsigned short page = 0);
+	nlohmann::json GetManga(std::string mangaID);
 	nlohmann::json GetChapters(std::string mangaID, std::string limit = "50", std::string offset = "0");
-	nlohmann::json GetUpdates(unsigned short limit = 10, unsigned short page = 0);
+	nlohmann::json GetChaptersAggregate(std::string mangaID);
+	nlohmann::json GetChapter(std::string chapterID);
+	nlohmann::json GetUpdates(unsigned short limit = 32, unsigned short page = 0);
+	nlohmann::json GetMangaStatistics(std::string mangaID);
+	nlohmann::json GetMangaStatistics(std::vector<std::string> mangaIDs);
 
 	//assets
 	nlohmann::json GetChapterImageMeta(std::string chapterID);
