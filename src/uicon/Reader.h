@@ -16,12 +16,14 @@ class DTReaderController
 {
     private:
         slint::ComponentHandle<DextopReaderWindow> windowHandle = DextopReaderWindow::create();
+        Dextop* dextop = nullptr;
 
         //chapter list view data
         std::string mangaID;
         std::string title;
         std::vector<slint::SharedString> authors;
         std::vector<slint::SharedString> artists;
+        nlohmann::json readMarkers = nullptr;
 
         //reader view data
         struct CurrentChapterData
@@ -71,6 +73,18 @@ class DTReaderController
             return chapterAggData.back().chapterID == chapterID;
         }
 
+        bool IsChapterRead(const std::string chapterID)
+        {
+            for (int i = 0; i < readMarkers.size(); i++)
+            {
+                if (readMarkers[i].get<std::string>() == chapterID)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         void Initialize(nlohmann::json mangaJson)
         {
             //parse json
@@ -97,8 +111,14 @@ class DTReaderController
                 return slint::CloseRequestResponse::HideWindow;
             });
 
+            windowHandle->on_openURL([&](slint::SharedString url)
+            {
+                DextopUtil::OpenURL(url.data());
+            });
+
             //prepare manga info/chapter list view
             windowHandle->set_windowTitle(slint::SharedString(title));
+            windowHandle->set_coverArt(slint::Image::load_from_path("assets/images/placeholders/cover-low.png"));
             dtThreadPool.detach_task([&]()
             {
                 FetchCover();
@@ -110,6 +130,13 @@ class DTReaderController
             std::future<void> chapterAggTask = dtThreadPool.submit_task([&]()
             {
                 FetchChapterAggData();
+            });
+            dtThreadPool.detach_task([&]()
+            {
+                if (dextop->dexxor.Authenticated() == true)
+                {
+                    readMarkers = dextop->dexxor.GetReadMarkers(mangaID);
+                }
             });
             windowHandle->set_authors(std::make_shared<slint::VectorModel<slint::SharedString>>(authors));
             windowHandle->set_artists(std::make_shared<slint::VectorModel<slint::SharedString>>(artists));
@@ -151,15 +178,24 @@ class DTReaderController
         void PopulateChapters(const int limit, const int page)
         {
             dtlog << "Retrieving chapter data for \"" << mangaID << "\" (limit: " << limit << ", offset: " << (page * limit) << ")" << std::endl;
-            slint::blocking_invoke_from_event_loop([&]
+            slint::invoke_from_event_loop([&]
             {
                 windowHandle->set_chapterSet(std::make_shared<slint::VectorModel<ReaderCVChapter>>(std::vector<ReaderCVChapter>()));
                 windowHandle->set_chapterListLoading(true);
                 windowHandle->set_chapterListBGText(slint::SharedString("Loading..."));
             });
 
-            nlohmann::json chapterData = Dextop::GetInstance()->dexxor.GetChapters(mangaID.data(), std::to_string(limit), std::to_string(page * limit));
+            nlohmann::json chapterData = dextop->dexxor.GetChapters(mangaID.data(), std::to_string(limit), std::to_string(page * limit));
             size_t resultCount = chapterData["data"].size();
+
+            bool isAuthenticated = dextop->dexxor.Authenticated();
+            if (isAuthenticated == true)
+            {
+                while (readMarkers == nullptr)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                }
+            }
             dtlog << "Done (got " << resultCount << " of total " << chapterData["total"].get<int>() << "). Populating UI..." << std::endl;
 
             if (resultCount > 0)
@@ -172,6 +208,9 @@ class DTReaderController
                     
                     makeChapter.id = chapterInfo["id"].begin().value();
                     makeChapter.pageCount = chapterInfo["attributes"]["pages"].get<int>();
+                    makeChapter.external = chapterInfo["attributes"]["externalUrl"].is_null() == false;
+                    makeChapter.externalURL = makeChapter.external ? chapterInfo["attributes"]["externalUrl"].get<std::string>() : "";
+                    makeChapter.read = isAuthenticated ? IsChapterRead(makeChapter.id.data()) : true;
                     makeChapter.title = std::string("Unknown Chapter");
                     if (chapterInfo["attributes"]["chapter"].is_null() == false)
                     {
@@ -191,7 +230,7 @@ class DTReaderController
                     chapterSet.push_back(makeChapter);
                 }
 
-                //determine page count
+                //determine results page count
                 int fLimit = chapterData["limit"].get<int>();
                 int fTotal = chapterData["total"].get<int>();
                 int pageCount = 0;
@@ -223,7 +262,6 @@ class DTReaderController
         //Retrieves and sets the cover art on the chapter list
         void FetchCover()
         {
-            Dextop* dextop = Dextop::GetInstance();
             std::string coverLocalPath = "";
             for (int j = 0; j < this->json["relationships"].size(); j++)
             {
@@ -250,7 +288,6 @@ class DTReaderController
         //Retrieves and sets the rating statistic
         void FetchMangaStats()
         {
-            Dextop* dextop = Dextop::GetInstance();
             nlohmann::json statsJson = dextop->dexxor.GetMangaStatistics(mangaID);
             if (statsJson.contains("rating")) //avoid bad responses
             {
@@ -264,7 +301,6 @@ class DTReaderController
         //Retrieve aggregate volume/chapter info
         void FetchChapterAggData()
         {
-            Dextop* dextop = Dextop::GetInstance();
             nlohmann::json aggData = dextop->dexxor.GetChaptersAggregate(mangaID);
 
             for (auto iterVolume = aggData.begin(); iterVolume != aggData.end(); iterVolume++)
@@ -293,7 +329,6 @@ class DTReaderController
         {
             dtlog << "RVLoadChapter: loading chapter " << chapterID << std::endl;
 
-            Dextop* dextop = Dextop::GetInstance();
             slint::blocking_invoke_from_event_loop([&]
             {
                 windowHandle->set_readerActive(true);
@@ -390,7 +425,6 @@ class DTReaderController
                 dtlog << "RVChangeImage: changing image to image " << index << " (max: " << currentChapterData.pageCount - 1 << ")" << std::endl;
 
                 //send for the needed image
-                Dextop* dextop = Dextop::GetInstance();
                 dextop->assetManager.GetChapterPage(
                     currentChapterData.baseURL + "/data/" + currentChapterData.hash + "/" + currentChapterData.imageNames[index],
                     currentChapterData.chapterID,
@@ -430,7 +464,7 @@ class DTReaderController
                         );
                     });
                 }
-                /*if (index < currentChapterData.imageNames.size() - 1) //page + 1
+                if (index < currentChapterData.imageNames.size() - 1) //page + 1
                 {
                     dtThreadPool.detach_task([=]()
                     {
@@ -451,7 +485,7 @@ class DTReaderController
                             currentChapterData.imageNames[index + 2]
                         );
                     });
-                }*/
+                }
             }
         }
     public:
@@ -459,13 +493,14 @@ class DTReaderController
 
         DTReaderController(nlohmann::json mangaJson)
         {
+            this->dextop = Dextop::GetInstance();
             Initialize(mangaJson);
             windowHandle->show();
         }
 
         DTReaderController(std::string chapterID, std::string mangaID)
         {
-            Dextop* dextop = Dextop::GetInstance();
+            this->dextop = Dextop::GetInstance();
             Initialize(dextop->dexxor.GetManga(mangaID));
             windowHandle->invoke_loadChapter(slint::SharedString(chapterID), 0);
             windowHandle->show();

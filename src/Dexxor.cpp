@@ -1,9 +1,10 @@
 #include "Dexxor.h"
 #include "Dextop.h"
-#include "Dextop_Defs.h"
+#include "DextopUtil.h"
 #include "Logger.h"
 
 #include <iostream>
+#include <chrono>
 #include <curl/curl.h>
 
 
@@ -12,7 +13,7 @@
 bool authenticated = false;
 std::string accessToken;
 std::string refreshToken;
-time_t tokenTime = 0;
+long long tokenTime;
 std::string tokenCID;
 std::string tokenCSecret;
 
@@ -32,17 +33,30 @@ void Dexxor::Initialize()
 
 	//pull saved auth info from settings
 	Dextop* dextop = Dextop::GetInstance();
-	accessToken = dextop->settings["authLastAccessToken"];
-	refreshToken = dextop->settings["authLastRefreshToken"];
-	tokenTime = dextop->settings["authLastSuccessTime"].get<time_t>();
+	accessToken = dextop->settings["authLastAccessToken"].get<std::string>();
+	refreshToken = dextop->settings["authLastRefreshToken"].get<std::string>();
+	tokenTime = dextop->settings["authLastSuccessTime"].get<long long>();
 	tokenCID = dextop->settings["authLastSuccessCID"];
 	tokenCSecret = dextop->settings["authLastSuccessCSecret"];
 
 	//attempt to reauthenticate if logged in previously
-	if (refreshToken != "" && AccessTokenExpired())
+	if (refreshToken != "")
 	{
-		dtlog << "Refreshing login..." << std::endl;
-		RefreshAccessToken();
+		authenticated = true;
+		if (AccessTokenExpired())
+		{
+			dtlog << "Stored auth token is expired (age: " << AccessTokenAge() << "). Refreshing login..." << std::endl;
+			RefreshAccessToken();
+		}
+	}
+
+	if (authenticated == true)
+	{
+		dtlog << "Authenticated: yes (token age: " << AccessTokenAge() << ")" << std::endl;
+	}
+	else
+	{
+		dtlog << "Authenticated: no" << std::endl;
 	}
 	
 	dtlog << "Dexxor init done" << std::endl;
@@ -107,7 +121,7 @@ void Dexxor::Authenticate(std::string argUsername, std::string argPassword, std:
 		authenticated = true;
 		accessToken = responseJson["access_token"];
 		refreshToken = responseJson["refresh_token"];
-		time(&tokenTime);
+		tokenTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::utc_clock::now().time_since_epoch()).count();
 		tokenCID = argClientID;
 		tokenCSecret = argClientSecret;
 		Dextop::GetInstance()->settings["authLastAccessToken"] = accessToken;
@@ -156,6 +170,7 @@ void Dexxor::RefreshAccessToken()
 	result = curl_easy_perform(curl);
 	if (result != CURLE_OK)
 	{
+		InvalidateAuthState();
 		dtlog << "Reauthentication request failed: " << curl_easy_strerror(result) << std::endl;
 		return;
 	}
@@ -166,23 +181,22 @@ void Dexxor::RefreshAccessToken()
 	{
 		authenticated = true;
 		accessToken = responseJson["access_token"];
-		time(&tokenTime);
+		tokenTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::utc_clock::now().time_since_epoch()).count();
 		Dextop::GetInstance()->settings["authLastAccessToken"] = accessToken;
 		Dextop::GetInstance()->settings["authLastSuccessTime"] = tokenTime;
 		dtlog << "Reauthentication succeeded." << std::endl;
 	}
 	else
 	{
-		authenticated = false;
+		InvalidateAuthState();
 		dtlog << "Reauthentication failed. Reason: " << responseJson["error"] << std::endl << responseJson << std::endl;
 	}
 }
 
 int Dexxor::AccessTokenAge()
 {
-	time_t now;
-	time(&now);
-	return now - tokenTime;
+	long long nowTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::utc_clock::now().time_since_epoch()).count();
+	return nowTime - tokenTime;
 }
 
 bool Dexxor::AccessTokenExpired()
@@ -192,6 +206,17 @@ bool Dexxor::AccessTokenExpired()
 		return AccessTokenAge() >= 899;
 	}
 	return true;
+}
+
+void Dexxor::InvalidateAuthState()
+{
+	authenticated = false;
+	accessToken = "";
+	refreshToken = "";
+	tokenTime = 0;
+	Dextop::GetInstance()->settings["authLastAccessToken"] = accessToken;
+	Dextop::GetInstance()->settings["authLastRefreshToken"] = refreshToken;
+	Dextop::GetInstance()->settings["authLastSuccessTime"] = tokenTime;
 }
 
 
@@ -483,6 +508,7 @@ nlohmann::json Dexxor::GetMangaStatistics(std::vector<std::string> mangaIDs)
 	{
 		url = url + "&manga[]=" + mangaIDs[i];
 	}
+	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 
 	result = curl_easy_perform(curl);
 	if (result != CURLE_OK)
@@ -498,6 +524,58 @@ nlohmann::json Dexxor::GetMangaStatistics(std::vector<std::string> mangaIDs)
 	}
 
 	return responseJson["statistics"];
+}
+
+nlohmann::json Dexxor::GetBulkReadMarkers(std::vector<std::string> mangaIDs, bool grouped)
+{
+	if (mangaIDs.size() == 0)
+	{
+		dtlog << "Dexxor::GetBulkReadMarkers: ID set is empty!" << std::endl;
+		return nlohmann::json();
+	}
+
+	//prepare
+	CURL* curl = curl_easy_init();
+	CURLcode result;
+	std::string readBuffer = "";
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, Dextop_UserAgent);
+	curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 100);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+	struct curl_slist* headers = curl_slist_append(NULL, (std::string("Authorization: Bearer ") + accessToken).c_str());
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+	//set url
+	std::string url = std::string("https://api.mangadex.org/manga/read?ids[]=") + mangaIDs[0];
+	for (int i = 1; i < mangaIDs.size(); i++)
+	{
+		url = url + "&ids[]=" + mangaIDs[i];
+	}
+	url = url + "&grouped=" + (grouped == true ? "true" : "false");
+	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+
+	result = curl_easy_perform(curl);
+	if (result != CURLE_OK)
+	{
+		dtlog << "GetBulkReadMarkers request failed: " << curl_easy_strerror(result) << std::endl;
+	}
+
+	nlohmann::json responseJson = nlohmann::json::parse(readBuffer);
+
+	if (responseJson["result"].get<std::string>() != "ok")
+	{
+		dtlog << "GetBulkReadMarkers request failed. Response: " << std::endl << responseJson.dump(4) << std::endl;
+	}
+
+	return responseJson["data"];
+}
+
+nlohmann::json Dexxor::GetReadMarkers(std::string mangaID)
+{
+	return GetBulkReadMarkers(
+		std::vector<std::string>{mangaID},
+		false
+	);
 }
 
 

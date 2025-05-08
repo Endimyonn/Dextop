@@ -1,32 +1,9 @@
 #pragma once
 
 #include "../Dextop.h"
-#include <sstream>
+#include "../DextopUtil.h"
 
 
-
-std::string url_encode(const std::string &value) {
-    std::ostringstream escaped;
-    escaped.fill('0');
-    escaped << std::hex;
-
-    for (std::string::const_iterator i = value.begin(), n = value.end(); i != n; ++i) {
-        std::string::value_type c = (*i);
-
-        // Keep alphanumeric and other accepted characters intact
-        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
-            escaped << c;
-            continue;
-        }
-
-        // Any other characters are percent-encoded
-        escaped << std::uppercase;
-        escaped << '%' << std::setw(2) << int((unsigned char) c);
-        escaped << std::nouppercase;
-    }
-
-    return escaped.str();
-}
 
 class DTMainSearchController
 {
@@ -43,7 +20,7 @@ class DTMainSearchController
                 dextop->ui->set_searchLoading(true);
                 dextop->ui->set_currentSearch(slint::SharedString(title));
             });
-            nlohmann::json searchResults = dextop->dexxor.Search(url_encode(title), limit, page);
+            nlohmann::json searchResults = dextop->dexxor.Search(DextopUtil::EncodeURL(title), limit, page);
             size_t resultCount = searchResults["data"].size();
             dtlog << "Search for \"" << title << "\": found " << resultCount << " (limit: " << limit << ", page: " << page << ", total: " << searchResults["total"] << ")" << std::endl;
         

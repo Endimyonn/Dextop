@@ -117,7 +117,10 @@ class DTMainUpdatesController
                 }
                 newItem.age = FormatAge(itemJson["attributes"]["publishAt"].get<std::string>());
                 newItem.uploader = relUserJson["attributes"]["username"].get<std::string>();
+                newItem.external = itemJson["attributes"]["externalUrl"].is_null() == false;
+                newItem.externalURL = newItem.external ? itemJson["attributes"]["externalUrl"].get<std::string>() : "";
                 newItem.pageCount = itemJson["attributes"]["pages"].get<int>();
+                newItem.read = false;
 
                 //add the chapter to the group items collection
                 if (uGroupItems.size() == groupIndex)
@@ -127,16 +130,38 @@ class DTMainUpdatesController
                 uGroupItems[groupIndex].push_back(newItem);
             }
 
+            //fill the UpdatesGroups
             for (int i = 0; i < uGroups.size(); i++)
             {
                 uGroups[i].chapterCount = uGroupItems[i].size();
                 uGroups[i].chapters = std::make_shared<slint::VectorModel<UpdatesItem>>(uGroupItems[i]);
             }
 
+            //set the UI
             slint::invoke_from_event_loop([=](){
                 dextop->ui->set_updatesGroups(std::make_shared<slint::VectorModel<UpdatesGroup>>(uGroups));
                 dextop->ui->set_updatesBGText(slint::SharedString(""));
                 dextop->ui->set_updatesRefreshButtonEnabled(true);
+            });
+
+            //fetch the read status of all the chapters and revise the list with them
+            nlohmann::json readJson = dextop->dexxor.GetBulkReadMarkers(createdGroups);
+            for (int i = 0; i < uGroups.size(); i++)
+            {
+                for (int j = 0; j < uGroupItems[i].size(); j++)
+                {
+                    for (int k = 0; k < readJson.size(); k++)
+                    {
+                        if (readJson.at(k).get<std::string>() == uGroupItems[i][j].id.data())
+                        {
+                            uGroupItems[i][j].read = true;
+                        }
+                    }
+                }
+                uGroups[i].chapters = std::make_shared<slint::VectorModel<UpdatesItem>>(uGroupItems[i]);
+            }
+            slint::invoke_from_event_loop([=](){
+                dextop->ui->set_updatesGroups(std::make_shared<slint::VectorModel<UpdatesGroup>>(uGroups));
             });
         }
 };

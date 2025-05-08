@@ -8,7 +8,10 @@ export struct UpdatesItem {
     groupName: string,
     age: string,
     uploader: string,
-    pageCount: int
+    external: bool,
+    externalURL: string,
+    pageCount: int,
+    read: bool
 }
 
 export struct UpdatesGroup {
@@ -37,6 +40,7 @@ export component DextopPrimaryWindow inherits Window {
     //general
     callback openManga(string);
     callback openChapter(string, string);
+    callback openURL(string);
 
     //update properties
     in property<string> updatesBGText: "";
@@ -205,6 +209,7 @@ export component DextopPrimaryWindow inherits Window {
                                                 x: parent.x + 5px;
                                                 width: 3px;
                                                 height: parent.height;
+                                                visible: !chapterData.read;
                                                 background: Palette.accent-background;
                                                 border-top-left-radius: 5px;
                                                 border-bottom-left-radius: 5px;
@@ -230,8 +235,6 @@ export component DextopPrimaryWindow inherits Window {
                                                 y: 5px;
                                                 width: 80px;
                                                 text: "🕓 " + chapterData.age;
-                                                horizontal-alignment: TextHorizontalAlignment.right;
-                                                vertical-alignment: center;
                                                 overflow: elide;
                                             }
 
@@ -239,14 +242,15 @@ export component DextopPrimaryWindow inherits Window {
                                                 x: parent.width - 10px - self.width - readButton.width;
                                                 y: parent.height - self.height - 5px;
                                                 width: 80px;
-                                                text: "📄 " + chapterData.pageCount + " pages";
+                                                text: !chapterData.external ? ("📄 " + chapterData.pageCount + " pages") : "🌐 External";
+                                                overflow: elide;
                                             }
 
                                             readButton := Button {
                                                 x: parent.width - self.width - 5px;
-                                                text: "Read";
+                                                text: !chapterData.external ? "Read" : "Open";
                                                 clicked => {
-                                                    root.openChapter(chapterData.id, data.id)
+                                                    !chapterData.external ? root.openChapter(chapterData.id, data.id) : root.openURL(chapterData.externalURL)
                                                 }
                                             }
                                         }
@@ -595,7 +599,10 @@ export struct ReaderCVChapter {
     id: string,
     title: string,
     groupName: string,
-    pageCount: int
+    external: bool,
+    externalURL: string,
+    pageCount: int,
+    read: bool
 }
 
 export component DextopReaderWindow inherits Window {
@@ -619,6 +626,7 @@ export component DextopReaderWindow inherits Window {
     callback loadMangaData();
     callback populateChapters(int);
     callback loadChapter(string, int);
+    callback openURL(string);
 
     // reader view properties
     in property<bool> readerActive: false;
@@ -717,7 +725,7 @@ export component DextopReaderWindow inherits Window {
             }
             enabled: !root.readerActive;
 
-            // for data in [{id: "?", fetchOffset: 0, title: "abc", groupName: "grouP", pageCount: 16}]: Rectangle {
+            // for data in [{id: "?", fetchOffset: 0, title: "abc", groupName: "grouP", pageCount: 16, read: false}]: Rectangle {
             for data in chapterSet : Rectangle {
                 height: 64px;
                 Rectangle {
@@ -725,6 +733,16 @@ export component DextopReaderWindow inherits Window {
                     max-width: 1024px;
                     background: #222222;
                     border-radius: 5px;
+
+                    Rectangle { // Unread marker
+                        x: parent.x;
+                        width: 3px;
+                        height: parent.height;
+                        visible: !data.read;
+                        background: Palette.accent-background;
+                        border-top-left-radius: 5px;
+                        border-bottom-left-radius: 5px;
+                    }
 
                     Text {
                         x: 8px;
@@ -746,16 +764,16 @@ export component DextopReaderWindow inherits Window {
                         }
 
                         Text {
-                            text: " ⸱ " + data.pageCount + " pages";
+                            text: " ⸱ " + (!data.external ? (data.pageCount + " pages") : "External");
                         }
                     }
 
                     Button {
-                        x: parent.width - 40px - (self.width / 2);
+                        x: parent.width - self.width - 8px;
                         height: 32px;
-                        text: "Read";
+                        text: !data.external ? "Read" : "Open";
                         clicked => {
-                            root.loadChapter(data.id, 0);
+                            !data.external ? root.loadChapter(data.id, 0) : root.openURL(data.externalURL)
                         }
                     }
                 }

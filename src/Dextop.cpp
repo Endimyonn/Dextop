@@ -1,5 +1,5 @@
 #include "Dextop.h"
-#include "Dextop_Defs.h"
+#include "DextopUtil.h"
 #include "uicon/MainUpdates.h"
 #include "uicon/MainSearch.h"
 #include "uicon/Reader.h"
@@ -130,6 +130,15 @@ void Dextop::Run()
 #endif
     );
 
+    //fetch updates if authenticated
+    if (dexxor.Authenticated() == true)
+    {
+        dtThreadPool.detach_task([]()
+        {
+            DTMainUpdatesController::DoRefreshUpdates();
+        });
+    }
+
     std::vector<DTReaderController*> readerWindows;
 
     ui->on_openManga([&readerWindows](slint::SharedString mangaJson) {
@@ -141,6 +150,11 @@ void Dextop::Run()
     {
         DTReaderController* readerController = new DTReaderController(chapterID.data(), mangaID.data());
         readerWindows.push_back(readerController);
+    });
+
+    ui->on_openURL([&](slint::SharedString url)
+    {
+        DextopUtil::OpenURL(url.data());
     });
 
     ui->on_getUpdates([&](){
@@ -220,5 +234,6 @@ void Dextop::Run()
 int main(int argc, char **argv)
 {
     dextop.Run();
+
     return 0;
 }
